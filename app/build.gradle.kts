@@ -13,8 +13,8 @@ android {
         applicationId = "top.msfxp.schedule"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -26,7 +26,7 @@ android {
 
     // 语言资源过滤
     androidResources {
-        localeFilters += listOf("zh", "zh-rCN")
+        localeFilters += listOf("zh")
     }
 
     buildTypes {
@@ -46,7 +46,6 @@ android {
     }
 
     packaging {
-        // 原生库压缩存储
         jniLibs {
             useLegacyPackaging = true
         }
@@ -56,16 +55,17 @@ android {
 
         resources {
             excludes += listOf(
-                "META-INF/LICENSE*",
-                "META-INF/NOTICE*",
-                "META-INF/DEPENDENCIES*",
-                "META-INF/*.version",
-                "META-INF/*.txt",
-                "META-INF/*.properties",
-                "META-INF/*.md",
+                "META-INF/**/LICENSE*",
+                "META-INF/**/NOTICE*",
+                "META-INF/**/DEPENDENCIES*",
+                "META-INF/**/AL2.0",
+                "META-INF/**/LGPL2.1",
+                "META-INF/**/*.version",
+                "META-INF/**/*.txt",
+                "META-INF/**/*.properties",
+                "META-INF/**/*.md",
                 "META-INF/*.kotlin_module",
                 "META-INF/INDEX.LIST",
-                "META-INF/{AL2.0,LGPL2.1}",
                 "DebugProbesKt.bin",
                 "kotlin-tooling-metadata.json"
             )

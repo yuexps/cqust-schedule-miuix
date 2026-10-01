@@ -20,32 +20,34 @@ object CqustEamsClient {
         passwordRaw: String,
         onProgress: ((String) -> Unit)? = null
     ): Result<ConnectedEamsSession> {
-        // 尝试统一身份认证通道
-        onProgress?.invoke("正在通过统一身份认证登录...")
+        // 1. 尝试统一身份认证通道
+        onProgress?.invoke("正在登录统一认证...")
         val casResult = CqustCasAuthClient.login(studentId, passwordRaw)
 
         if (casResult.success && casResult.session != null) {
-            onProgress?.invoke("统一身份认证成功，正在接入教务系统...")
+            onProgress?.invoke("正在接入教务系统...")
             val vpnSession = casResult.session
             val vpnEamsBase = CqustVpnCrypto.buildVpnUrl("http", JWNEW_HOST, "/eams")
             val unifiedLoginUrl = "$vpnEamsBase/unifiedLogin.action"
 
-            val (homeUrl, ssoResp) = vpnSession.getFollowingRedirects(unifiedLoginUrl)
-            if (homeUrl.contains("eams") || ssoResp.status.value in 200..399) {
-                val transport = WebVpnEamsTransport(vpnSession, vpnEamsBase)
-                return Result.success(ConnectedEamsSession(transport = transport, vpnSession = vpnSession))
+            try {
+                val (homeUrl, ssoResp) = vpnSession.getFollowingRedirects(unifiedLoginUrl)
+                if (homeUrl.contains("eams") || ssoResp.status.value in 200..399) {
+                    val transport = WebVpnEamsTransport(vpnSession, vpnEamsBase)
+                    return Result.success(ConnectedEamsSession(transport = transport, vpnSession = vpnSession))
+                }
+            } catch (_: Exception) {
+                // WebVPN 单点登录或代理异常，继续进入直连/IPv6 降级通道
             }
         }
 
-        // 2. 若统一身份认证因网络异常不可达，降级尝试直连/IPv6 通道
-        if (casResult.isNetworkError || !casResult.success) {
-            onProgress?.invoke("统一身份认证不可用，降级尝试校园网/IPv6直连通道...")
-            for (directUrl in DIRECT_URLS) {
-                val directTransport = DirectEamsTransport(baseUrl = directUrl)
-                val loginResult = directTransport.login(studentId, passwordRaw)
-                if (loginResult.isSuccess) {
-                    return Result.success(ConnectedEamsSession(transport = directTransport, vpnSession = null))
-                }
+        // 2. 降级尝试校园网/IPv6 直连通道
+        onProgress?.invoke("正在尝试IPv6/直连...")
+        for (directUrl in DIRECT_URLS) {
+            val directTransport = DirectEamsTransport(baseUrl = directUrl)
+            val loginResult = directTransport.login(studentId, passwordRaw)
+            if (loginResult.isSuccess) {
+                return Result.success(ConnectedEamsSession(transport = directTransport, vpnSession = null))
             }
         }
 

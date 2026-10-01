@@ -1,20 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#0066FF</color>
-    <color name="ic_launcher_background">#0066FF</color>
     <!-- 小组件浅色模式色彩系统 -->
-    <color name="widget_bg">#F2F4F7</color>
     <color name="widget_card_bg">#FFFFFF</color>
-    <color name="widget_card_surface">#F5F6F8</color>
-    <color name="widget_card_surface_ongoing">#EBF3FF</color>
     <color name="widget_text_primary">#1D2129</color>
     <color name="widget_text_secondary">#86909C</color>
     <color name="widget_text_tertiary">#B4B9C2</color>
-    <color name="widget_divider">#E5E6EB</color>
-    <color name="widget_badge_bg">#E8F3FF</color>
-    <color name="widget_badge_text">#0066FF</color>
-    <color name="widget_badge_finished_bg">#F2F3F5</color>
-    <color name="widget_badge_finished_text">#86909C</color>
-    <color name="widget_item_indicator">#0066FF</color>
-    <color name="widget_item_indicator_finished">#C9CDD4</color>
 </resources>
