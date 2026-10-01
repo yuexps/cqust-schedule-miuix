@@ -1,0 +1,177 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: '版本号 (例如 1.0.3，留空则保持当前版本)'
+        required: false
+        default: ''
+      release_title:
+        description: 'Release 标题 (选填)'
+        required: false
+        default: ''
+      release_notes:
+        description: 'Release 更新说明 (选填)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build arm64-v8a APK & Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Resolve and Update Project Version
+        id: resolve_version
+        run: |
+          RAW_INPUT="${{ github.event.inputs.version_name }}"
+          # 去除可能误填的 v 前缀 (例如 v1.0.3 -> 1.0.3)
+          INPUT_VERSION="${RAW_INPUT#v}"
+
+          CURRENT_VERSION=$(grep -E 'versionName\s*=\s*' app/build.gradle.kts | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/')
+
+          if [ -n "$INPUT_VERSION" ] && [ "$INPUT_VERSION" != "$CURRENT_VERSION" ]; then
+            echo "Updating project version from $CURRENT_VERSION to $INPUT_VERSION..."
+            
+            # 自增 versionCode
+            OLD_CODE=$(grep -E 'versionCode\s*=\s*' app/build.gradle.kts | head -n 1 | sed -E 's/.*versionCode\s*=\s*([0-9]+).*/\1/')
+            NEW_CODE=$((OLD_CODE + 1))
+            sed -i -E "s/(versionCode\s*=\s*)[0-9]+/\1$NEW_CODE/" app/build.gradle.kts
+            sed -i -E "s/(versionName\s*=\s*\")[^\"]+(\")/\1$INPUT_VERSION\2/" app/build.gradle.kts
+
+            # 提交并推送版本更新至仓库
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add app/build.gradle.kts
+            git commit -m "chore(release): bump version to $INPUT_VERSION (code $NEW_CODE) [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+
+            VERSION_NAME="$INPUT_VERSION"
+          else
+            VERSION_NAME="$CURRENT_VERSION"
+          fi
+
+          if [ -z "$VERSION_NAME" ]; then
+            echo "Error: Could not resolve valid version"
+            exit 1
+          fi
+
+          TAG_NAME="v${VERSION_NAME}"
+
+          if [ -n "${{ github.event.inputs.release_title }}" ]; then
+            RELEASE_TITLE="${{ github.event.inputs.release_title }}"
+          else
+            RELEASE_TITLE="${TAG_NAME}"
+          fi
+
+          # 提取或生成 Release Notes (留空则自动提取至上个版本的提交记录)
+          if [ -n "${{ github.event.inputs.release_notes }}" ]; then
+            RELEASE_NOTES="${{ github.event.inputs.release_notes }}"
+          else
+            PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+            if [ -n "$PREV_TAG" ]; then
+              echo "Extracting changelog since previous tag: $PREV_TAG"
+              RELEASE_NOTES=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges | grep -v "chore(release):" || true)
+            else
+              echo "No previous tag found, extracting recent commits"
+              RELEASE_NOTES=$(git log -n 10 --pretty=format:"- %s" --no-merges | grep -v "chore(release):" || true)
+            fi
+
+            if [ -z "$RELEASE_NOTES" ]; then
+              RELEASE_NOTES="常规体验优化与问题修复"
+            fi
+          fi
+
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "RELEASE_TITLE=$RELEASE_TITLE" >> $GITHUB_ENV
+          {
+            echo "RELEASE_NOTES<<EOF"
+            echo "$RELEASE_NOTES"
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+          echo "Resolved Version: $VERSION_NAME"
+          echo "Resolved Tag: $TAG_NAME"
+          echo "Resolved Title: $RELEASE_TITLE"
+
+      - name: Build arm64-v8a Release APK
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Sign and Prepare APK
+        id: sign_apk
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEY }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          APK_DIR="app/build/outputs/apk/release"
+          TARGET_APK="cqust-schedule-${TAG_NAME}-arm64-v8a.apk"
+          
+          # 寻找构建产物
+          SRC_APK=$(find $APK_DIR -maxdepth 1 -name "*.apk" | head -n 1)
+          if [ -z "$SRC_APK" ]; then
+            echo "Error: No APK file found in $APK_DIR"
+            exit 1
+          fi
+
+          echo "Found source APK: $SRC_APK"
+
+          # 定位最新 apksigner 工具
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
+          if [ -z "$APKSIGNER" ]; then
+            echo "Error: apksigner not found"
+            exit 1
+          fi
+
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "Error: 请先在 GitHub 仓库 Secrets 中配置 SIGNING_KEY, KEY_ALIAS, KEYSTORE_PASSWORD, KEY_PASSWORD"
+            exit 1
+          fi
+
+          echo "Decoding keystore and signing APK..."
+          echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+
+          "$APKSIGNER" sign \
+            --ks release.jks \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass pass:"$KEYSTORE_PASSWORD" \
+            --key-pass pass:"$KEY_PASSWORD" \
+            --out "$APK_DIR/$TARGET_APK" \
+            "$SRC_APK"
+
+          rm -f release.jks
+          echo "Release APK ready: $APK_DIR/$TARGET_APK"
+          echo "FINAL_APK_PATH=$APK_DIR/$TARGET_APK" >> $GITHUB_ENV
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          target_commitish: ${{ github.ref_name }}
+          name: ${{ env.RELEASE_TITLE }}
+          body: ${{ env.RELEASE_NOTES }}
+          files: ${{ env.FINAL_APK_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
