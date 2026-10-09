@@ -32,7 +32,10 @@ object CqustEamsClient {
 
             try {
                 val (homeUrl, ssoResp) = vpnSession.getFollowingRedirects(unifiedLoginUrl)
-                if (homeUrl.contains("eams") || ssoResp.status.value in 200..399) {
+                val hasEnteredEams = homeUrl.contains("eams") &&
+                        ssoResp.status.value in 200..399 &&
+                        !homeUrl.contains("/login")
+                if (hasEnteredEams) {
                     val transport = WebVpnEamsTransport(vpnSession, vpnEamsBase)
                     return Result.success(ConnectedEamsSession(transport = transport, vpnSession = vpnSession))
                 }

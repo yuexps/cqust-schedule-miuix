@@ -1,11 +1,9 @@
 # 项目智能体规范 (AGENTS.md)
 
-## 1. 跨平台与环境换行符约束
-- **Windows 脚本文件**：在 Windows 环境下创建或运行的批处理脚本 (`.bat`, `.cmd`)、PowerShell 脚本 (`.ps1`) 以及用于本地自动化测试的脚本，必须统一使用 **CRLF (`\r\n`)** 换行符，避免因换行符解析导致命令截断或执行异常。
-- **控制台防乱码规范**：
-  - Windows PowerShell / CMD 执行输出时必须保证 UTF-8 兼容（如使用 `chcp 65001` 或显式设置输出流编码）；
-  - Python 等辅助测试脚本在 Windows 运行时，必须在入口处配置 `sys.stdout.reconfigure(encoding='utf-8')`。
-- **源码与工程文件**：Kotlin 源码、Gradle 构建配置及资源文件保持标准跨平台规范。
+## 1. Windows 开发环境规则
+- **换行符**：Windows 脚本（`.bat`、`.cmd`、`.ps1`、本地自动化脚本）统一使用 **CRLF**；Kotlin、Gradle、资源文件保持跨平台标准换行。
+- **编码**：Windows 控制台输出保持 UTF-8（CMD 用 `chcp 65001`；PowerShell 设置输出流编码）；Python 入口配置 `sys.stdout.reconfigure(encoding='utf-8')`。
+- **PowerShell**：本环境使用 PowerShell 7，所有命令必须用 `pwsh` 执行，禁止 `powershell.exe`。
 
 ## 2. 语言与注释规范
 - **语言要求**：所有回复、思考过程、分析文档及任务清单均须使用中文。
@@ -35,6 +33,7 @@
 
 ## 6. 项目模块与架构导航
 - 全模块文件功能简要说明与快速定位索引详见：[docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)；
-- 新智能体或进行复杂重构时，优先查阅该文件以快速定位核心业务分层与文件职责。
+- 新智能体或进行复杂重构时，优先查阅该文件以快速定位核心业务分层与文件职责；
+- 模块发生重大变更后，应更新维护 [PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) 文件。
 
 

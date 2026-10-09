@@ -99,12 +99,22 @@ class DirectEamsTransport(
     }
 
     private fun updateCookies(response: HttpResponse) {
-        val setCookies = response.headers.getAll(HttpHeaders.SetCookie) ?: return
-        for (sc in setCookies) {
-            val firstPart = sc.substringBefore(';')
-            val eqIndex = firstPart.indexOf('=')
-            if (eqIndex > 0) {
-                cookieMap[firstPart.substring(0, eqIndex).trim()] = firstPart.substring(eqIndex + 1).trim()
+        val setCookies = response.headers.getAll(HttpHeaders.SetCookie)
+            ?: response.headers.getAll("Set-Cookie")
+            ?: response.headers.getAll("set-cookie")
+            ?: return
+        for (header in setCookies) {
+            val items = header.split(Regex(",(?=[^;]+=[^;]+)"))
+            for (item in items) {
+                val firstPart = item.substringBefore(';').trim()
+                val eqIndex = firstPart.indexOf('=')
+                if (eqIndex > 0) {
+                    val key = firstPart.substring(0, eqIndex).trim()
+                    val value = firstPart.substring(eqIndex + 1).trim()
+                    if (key.isNotEmpty()) {
+                        cookieMap[key] = value
+                    }
+                }
             }
         }
     }
@@ -182,6 +192,9 @@ class DirectEamsTransport(
 
             val location = loginResp.headers[HttpHeaders.Location]
             if (location != null && (location.contains("home") || location.contains("index"))) {
+                // 跟随重定向完成教务主页会话落地
+                val homeTarget = resolveUrl("$baseUrl/login.action", location)
+                get(homeTarget, referer = "$baseUrl/login.action")
                 Result.success(Unit)
             } else {
                 val failHtml = loginResp.bodyAsText()

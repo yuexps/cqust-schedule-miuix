@@ -11,7 +11,6 @@ import top.msfxp.schedule.data.model.StudentProfile
 import top.msfxp.schedule.data.model.effectiveStartDate
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
-import top.msfxp.schedule.service.CalendarSyncHelper
 
 // 同步结果统计数据模型
 data class SyncResultSummary(
@@ -24,8 +23,7 @@ data class SyncResultSummary(
 // 课表数据同步服务协调器
 class CqustSyncManager(
     private val settingsRepository: SettingsRepository,
-    private val scheduleRepository: ScheduleRepository,
-    private val calendarSyncHelper: CalendarSyncHelper
+    private val scheduleRepository: ScheduleRepository
 ) {
 
     // 登录教务并同步课表到本地数据库
@@ -56,24 +54,25 @@ class CqustSyncManager(
         if (!eamsResult.success) {
             return@withContext Result.failure(Exception(eamsResult.errorMessage ?: "教务课表解析失败"))
         }
-        if (!allowEmpty && eamsResult.courses.isEmpty()) {
-            return@withContext Result.failure(Exception("教务系统返回课程数为 0，不覆盖本地课表"))
+
+        val tableId = scheduleRepository.getOrCreateDefaultTableId()
+        val localCourses = scheduleRepository.getAllCoursesWithEventsOnce(tableId)
+        if (eamsResult.courses.isEmpty() && (!allowEmpty || localCourses.isNotEmpty())) {
+            return@withContext Result.failure(Exception("教务系统返回课程数为 0，为防止误清空未覆盖本地课表"))
         }
 
         // 3. 构建时空原子矩阵
-        val tableId = scheduleRepository.getOrCreateDefaultTableId()
         val (courses, events) = ScheduleMatrixBuilder.build(
             tableId = tableId,
             eamsCourses = eamsResult.courses,
             practicalItems = practicalItems
         )
 
-        // 4. 持久化存储与后续联动
+        // 4. 持久化存储（入库后由 CourseAlarmObserver 统一响应式触发日历同步）
         try {
             scheduleRepository.saveSchedule(tableId, courses, events)
             saveSemesters(eamsResult)
             persistProfileAndCredentials(sid, pwd, eamsResult.profile)
-            triggerCalendarSyncIfNeeded()
 
             val regularCount = courses.count { it.courseType == COURSE_TYPE_THEORY }
             val practicalCount = courses.count { it.courseType == COURSE_TYPE_PRACTICAL }
@@ -172,18 +171,6 @@ class CqustSyncManager(
             className = profile.className,
             passwordEncrypted = encryptedPassword
         )
-    }
-
-    // 触发系统日历同步
-    private suspend fun triggerCalendarSyncIfNeeded() {
-        val currentSettings = settingsRepository.getAppSettingsOnce()
-        if (currentSettings.autoSyncToCalendar) {
-            runCatching {
-                calendarSyncHelper.syncCurrentScheduleToCalendar()
-            }.onFailure { e ->
-                android.util.Log.e("CqustSyncManager", "Auto sync to calendar failed", e)
-            }
-        }
     }
 
     // 静默同步课表

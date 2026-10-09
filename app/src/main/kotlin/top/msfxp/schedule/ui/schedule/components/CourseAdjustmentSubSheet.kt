@@ -71,10 +71,40 @@ fun CourseAdjustmentSubSheet(
         mutableStateOf(existingAdjustment?.targetLocation ?: event.location)
     }
 
-    // 实时检测目标坐标课程
-    val targetConflictCourse = remember(targetWeek, targetDay, targetStartSection, targetEndSection) {
-        getCourseAtSlot(targetWeek, targetDay, targetStartSection, targetEndSection)
+    // 数据变更检测
+    val isSlotChanged = targetWeek != currentWeek ||
+            targetDay != event.day ||
+            targetStartSection != event.startSection ||
+            targetEndSection != event.endSection
+    val isLocationChanged = targetLocation.trim() != event.location.trim()
+
+    val isSameAsOriginal = !isSlotChanged && !isLocationChanged
+
+    val isSameAsExisting = existingAdjustment != null &&
+            targetWeek == existingAdjustment.targetWeek &&
+            targetDay == existingAdjustment.targetDay &&
+            targetStartSection == existingAdjustment.targetStartSection &&
+            targetEndSection == existingAdjustment.targetEndSection &&
+            targetLocation.trim() == existingAdjustment.targetLocation.trim()
+
+    val isDataChanged = !isSameAsOriginal && !isSameAsExisting
+
+    // 实时检测目标坐标课程（未更改时段或自身课程直接判定为无目标冲突课程）
+    val targetConflictCourse = remember(targetWeek, targetDay, targetStartSection, targetEndSection, isSlotChanged) {
+        if (!isSlotChanged) {
+            null
+        } else {
+            val course = getCourseAtSlot(targetWeek, targetDay, targetStartSection, targetEndSection)
+            if (course != null && course.courseId == event.courseId && course.week == currentWeek && course.day == event.day && course.startSection == event.startSection) {
+                null
+            } else {
+                course
+            }
+        }
     }
+
+    val isSpanMatched = targetConflictCourse == null ||
+            (targetConflictCourse.endSection - targetConflictCourse.startSection) == (event.endSection - event.startSection)
 
     val dayNames = listOf(
         stringResource(R.string.day_monday),
@@ -96,40 +126,30 @@ fun CourseAdjustmentSubSheet(
         7 to stringResource(R.string.day_sun_short)
     )
 
-    // 常用节次快捷选项
-    val sectionPresets = listOf(
-        1 to 2 to stringResource(R.string.course_section_range_1_2),
-        3 to 4 to stringResource(R.string.course_section_range_3_4),
-        5 to 6 to stringResource(R.string.course_section_range_5_6),
-        7 to 8 to stringResource(R.string.course_section_range_7_8),
-        9 to 10 to stringResource(R.string.course_section_range_9_10),
-        11 to 12 to stringResource(R.string.course_section_range_11_12)
-    )
+    val isFourSectionSpan = (event.endSection - event.startSection + 1) == 4
+
+    // 节次预设选项：4 节大课与 2 节普通课
+    val sectionPresets = if (isFourSectionSpan) {
+        listOf(
+            SectionPreset(1, 4, stringResource(R.string.course_section_range_1_4)),
+            SectionPreset(5, 8, stringResource(R.string.course_section_range_5_8))
+        )
+    } else {
+        listOf(
+            SectionPreset(1, 2, stringResource(R.string.course_section_range_1_2)),
+            SectionPreset(3, 4, stringResource(R.string.course_section_range_3_4)),
+            SectionPreset(5, 6, stringResource(R.string.course_section_range_5_6)),
+            SectionPreset(7, 8, stringResource(R.string.course_section_range_7_8)),
+            SectionPreset(9, 10, stringResource(R.string.course_section_range_9_10))
+        )
+    }
 
     val origDayStr = if (event.day in 1..7) dayNames[event.day - 1] else stringResource(R.string.course_pending_location)
     val targetDayStr = if (targetDay in 1..7) dayNames[targetDay - 1] else stringResource(R.string.course_pending_location)
 
-    // 数据变更检测
-    val isSlotChanged = targetWeek != currentWeek ||
-            targetDay != event.day ||
-            targetStartSection != event.startSection ||
-            targetEndSection != event.endSection
-    val isLocationChanged = targetLocation.trim() != event.location.trim()
-
-    val isSameAsOriginal = !isSlotChanged && !isLocationChanged
-
-    val isSameAsExisting = existingAdjustment != null &&
-            targetWeek == existingAdjustment.targetWeek &&
-            targetDay == existingAdjustment.targetDay &&
-            targetStartSection == existingAdjustment.targetStartSection &&
-            targetEndSection == existingAdjustment.targetEndSection &&
-            targetLocation.trim() == existingAdjustment.targetLocation.trim()
-
-    val isDataChanged = !isSameAsOriginal && !isSameAsExisting
-
     val isConfirmEnabled = when (mode) {
         CourseAdjustmentMode.MOVE -> isDataChanged && (!isSlotChanged || targetConflictCourse == null)
-        CourseAdjustmentMode.SWAP -> isSlotChanged && targetConflictCourse != null
+        CourseAdjustmentMode.SWAP -> isSlotChanged && targetConflictCourse != null && isSpanMatched
         CourseAdjustmentMode.DELETE -> true
     }
 
@@ -448,9 +468,8 @@ fun CourseAdjustmentSubSheet(
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            sectionPresets.forEach { (secRange, label) ->
-                                val (start, end) = secRange
-                                val isSelected = targetStartSection == start && targetEndSection == end
+                            sectionPresets.forEach { preset ->
+                                val isSelected = targetStartSection == preset.start && targetEndSection == preset.end
                                 Box(
                                     modifier = Modifier
                                         .height(36.dp)
@@ -460,14 +479,14 @@ fun CourseAdjustmentSubSheet(
                                             else MiuixTheme.colorScheme.surfaceVariant
                                         )
                                         .clickable {
-                                            targetStartSection = start
-                                            targetEndSection = end
+                                            targetStartSection = preset.start
+                                            targetEndSection = preset.end
                                         }
                                         .padding(horizontal = 12.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
-                                        text = label,
+                                        text = preset.label,
                                         style = MiuixTheme.textStyles.body2.copy(
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                         ),
@@ -530,43 +549,84 @@ fun CourseAdjustmentSubSheet(
                             }
                         }
                     } else if (mode == CourseAdjustmentMode.SWAP) {
-                        if (targetConflictCourse != null) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                    .padding(12.dp)
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.course_edit_hint_swap_valid,
-                                        targetConflictCourse.inlineTitle,
-                                        targetDayStr,
-                                        targetConflictCourse.startSection,
-                                        targetConflictCourse.endSection,
-                                        targetConflictCourse.location.ifBlank { stringResource(R.string.course_pending_location) }
-                                    ),
-                                    style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MiuixTheme.colorScheme.primary,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                        if (isSlotChanged) {
+                            if (targetConflictCourse != null) {
+                                if (!isSpanMatched) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MiuixTheme.colorScheme.error.copy(alpha = 0.12f))
+                                            .padding(12.dp)
+                                    ) {
+                                        val currentSpan = event.endSection - event.startSection + 1
+                                        val targetSpan = targetConflictCourse.endSection - targetConflictCourse.startSection + 1
+                                        Text(
+                                            text = stringResource(R.string.course_edit_hint_swap_span_mismatch, currentSpan, targetSpan),
+                                            style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MiuixTheme.colorScheme.error,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.course_edit_hint_swap_valid,
+                                                targetConflictCourse.inlineTitle,
+                                                targetDayStr,
+                                                targetConflictCourse.startSection,
+                                                targetConflictCourse.endSection,
+                                                targetConflictCourse.location.ifBlank { stringResource(R.string.course_pending_location) }
+                                            ),
+                                            style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
+                                            color = MiuixTheme.colorScheme.primary,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(0xFFF59E0B).copy(alpha = 0.12f))
+                                        .padding(12.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.course_edit_hint_swap_invalid),
+                                        style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
+                                        color = Color(0xFFD97706)
+                                    )
+                                }
                             }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(Color(0xFFF59E0B).copy(alpha = 0.12f))
-                                    .padding(12.dp)
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.course_edit_hint_swap_invalid),
-                                    style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
-                                    color = Color(0xFFD97706)
-                                )
-                            }
+                        }
+                    } else if (mode == CourseAdjustmentMode.DELETE) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MiuixTheme.colorScheme.error.copy(alpha = 0.12f))
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.course_edit_hint_delete,
+                                    origDayStr,
+                                    event.startSection,
+                                    event.endSection
+                                ),
+                                style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
+                                color = MiuixTheme.colorScheme.error
+                            )
                         }
                     }
                 }
@@ -591,3 +651,10 @@ fun CourseAdjustmentSubSheet(
         }
     }
 }
+
+// 调课节次选项模型
+private data class SectionPreset(
+    val start: Int,
+    val end: Int,
+    val label: String
+)

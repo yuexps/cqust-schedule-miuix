@@ -63,9 +63,7 @@ class CourseAlarmObserver(
             .distinctUntilChanged()
             .debounce(500L)
             .onEach { params ->
-                if (params.reminderEnabled || params.autoDndEnabled) {
-                    DndSchedulerWorker.triggerImmediately(context)
-                }
+                DndSchedulerWorker.triggerImmediately(context)
                 updateAllAppWidgets(context)
                 if (params.autoSyncToCalendar && calendarSyncHelper.hasCalendarPermission()) {
                     calendarSyncHelper.syncCurrentScheduleToCalendar()

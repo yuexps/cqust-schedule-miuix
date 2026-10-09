@@ -35,7 +35,7 @@ val appModule = module {
 
     // 服务与同步组件
     single { CalendarSyncHelper(get(), get(), get()) }
-    single { CqustSyncManager(get(), get(), get()) }
+    single { CqustSyncManager(get(), get()) }
 
     // 课表与闹钟调度观察器
     single(createdAtStart = true) {

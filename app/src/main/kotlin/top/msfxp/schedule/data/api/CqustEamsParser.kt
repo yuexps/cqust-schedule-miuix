@@ -101,6 +101,13 @@ object CqustEamsParser {
             }
 
             if (!tableHtml.contains("TaskActivity") && !tableHtml.contains("未安排时间任务列表")) {
+                if (tableHtml.isBlank() || tableHtml.contains("loginForm") || tableHtml.contains("cqustadminweb=1")) {
+                    return EamsFetchResult(
+                        success = false,
+                        errorMessage = "教务会话已失效或课表页面不可用",
+                        isNetworkError = false
+                    )
+                }
                 return EamsFetchResult(
                     success = true,
                     studentId = studentId,

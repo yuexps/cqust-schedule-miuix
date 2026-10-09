@@ -95,7 +95,7 @@ class DndSchedulerWorker(
             )
 
             val today = LocalDate.now()
-            for (targetDate in listOf(today, today.plusDays(1))) {
+            for (targetDate in (0L..6L).map { today.plusDays(it) }) {
                 syncAlarmsForDate(targetDate, scheduleContext, alarmManager)
             }
             Result.success()

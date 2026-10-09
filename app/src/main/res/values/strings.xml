@@ -290,7 +290,8 @@
     <string name="course_edit_hint_move_invalid">目标时段已有课程《%1$s》，不能移动！请切换为「调换」或更改目标时段</string>
     <string name="course_edit_hint_swap_valid">将与《%1$s》（%2$s 第%3$d-%4$d节 @%5$s）互换时段</string>
     <string name="course_edit_hint_swap_invalid">目标时段暂无课程，无法调换！若想排入空闲时段请选择「移动」</string>
-    <string name="course_edit_hint_delete">仅标记本节删除（%1$s 第%2$d-%3$d节），不影响原排课</string>
+    <string name="course_edit_hint_swap_span_mismatch">两门课程节次长度不一致（%1$d节 vs %2$d节），无法直接调换</string>
+    <string name="course_edit_hint_delete">标记删除（%1$s 第%2$d-%3$d节）,不影响其他课</string>
     <string name="course_edit_btn_restore">恢复默认排课</string>
     <string name="course_tag_adjusted">调</string>
 
@@ -299,7 +300,8 @@
     <string name="course_section_range_5_6">5-6节</string>
     <string name="course_section_range_7_8">7-8节</string>
     <string name="course_section_range_9_10">9-10节</string>
-    <string name="course_section_range_11_12">11-12节</string>
+    <string name="course_section_range_1_4">1-4节</string>
+    <string name="course_section_range_5_8">5-8节</string>
 
     <!-- 三级页面 3：调课记录列表抽屉 -->
     <string name="adjustments_screen_title">调课记录</string>
@@ -336,7 +338,7 @@
     <string name="about_desc_qq_group">重科课表 (767082393)</string>
     <string name="about_item_disclaimer">说明</string>
     <string name="about_update_dialog_title">发现新版本 %1$s</string>
-    <string name="about_update_dialog_btn_download">立即更新</string>
+    <string name="about_update_dialog_btn_download">立即下载</string>
     <string name="about_update_dialog_btn_later">稍后再说</string>
     <string name="about_update_check_failed">检查更新失败: %1$s</string>
     <string name="about_update_already_latest">当前已是最新版本 (%1$s)</string>
