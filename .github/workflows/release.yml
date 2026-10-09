@@ -92,10 +92,10 @@ jobs:
             PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
             if [ -n "$PREV_TAG" ]; then
               echo "Extracting changelog since previous tag: $PREV_TAG"
-              RELEASE_NOTES=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges | grep -v "chore(release):" || true)
+              RELEASE_NOTES=$(git log "${PREV_TAG}..HEAD" --pretty=format:"- %s" --no-merges | grep -v "\[skip ci\]" || true)
             else
               echo "No previous tag found, extracting recent commits"
-              RELEASE_NOTES=$(git log -n 10 --pretty=format:"- %s" --no-merges | grep -v "chore(release):" || true)
+              RELEASE_NOTES=$(git log -n 10 --pretty=format:"- %s" --no-merges | grep -v "\[skip ci\]" || true)
             fi
 
             if [ -z "$RELEASE_NOTES" ]; then
