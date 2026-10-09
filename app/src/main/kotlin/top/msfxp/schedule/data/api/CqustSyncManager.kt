@@ -54,14 +54,12 @@ class CqustSyncManager(
         if (!eamsResult.success) {
             return@withContext Result.failure(Exception(eamsResult.errorMessage ?: "教务课表解析失败"))
         }
-
-        val tableId = scheduleRepository.getOrCreateDefaultTableId()
-        val localCourses = scheduleRepository.getAllCoursesWithEventsOnce(tableId)
-        if (eamsResult.courses.isEmpty() && (!allowEmpty || localCourses.isNotEmpty())) {
-            return@withContext Result.failure(Exception("教务系统返回课程数为 0，为防止误清空未覆盖本地课表"))
+        if (!allowEmpty && eamsResult.courses.isEmpty()) {
+            return@withContext Result.failure(Exception("返回课程数为 0，不覆盖本地课表"))
         }
 
         // 3. 构建时空原子矩阵
+        val tableId = scheduleRepository.getOrCreateDefaultTableId()
         val (courses, events) = ScheduleMatrixBuilder.build(
             tableId = tableId,
             eamsCourses = eamsResult.courses,

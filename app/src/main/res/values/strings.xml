@@ -348,4 +348,7 @@
     <string name="about_download_started_toast">已启动系统下载，请在通知栏查看进度</string>
     <string name="about_download_notification_title">重科课表 %1$s</string>
     <string name="about_download_notification_desc">正在下载安装包…</string>
+    <string name="about_install_started_toast">安装包下载完成，正在调起安装…</string>
+    <string name="about_install_failed_toast">无法打开安装包，请在文件管理器中手动安装</string>
+    <string name="about_install_permission_tip">请允许安装未知应用以完成版本更新</string>
 </resources>

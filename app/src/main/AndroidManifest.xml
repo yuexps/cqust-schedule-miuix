@@ -22,6 +22,9 @@
     <!-- 电池优化白名单申请权限 -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- 应用安装包安装权限 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- 地图软件包名与意图可见性声明 -->
     <queries>
         <!-- 高德地图 -->
@@ -88,6 +91,26 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_schedule_info" />
         </receiver>
+
+        <!-- 安装包下载完成自动拉起安装广播接收器 -->
+        <receiver
+            android:name=".service.DownloadCompleteReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 安装包 URI 分享 FileProvider -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

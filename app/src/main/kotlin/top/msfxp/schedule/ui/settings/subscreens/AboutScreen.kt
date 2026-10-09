@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.msfxp.schedule.R
+import top.msfxp.schedule.data.api.UpdateCheckService
 import top.msfxp.schedule.ui.settings.AboutViewModel
 import top.msfxp.schedule.ui.settings.UpdateCheckState
 import top.msfxp.schedule.util.AppActionHelper
@@ -318,28 +319,34 @@ fun AboutScreen(
                                 val isApk = targetUrl.endsWith(".apk", ignoreCase = true) ||
                                         release.assets.any { it.browserDownloadUrl == targetUrl }
 
-                                if (isApk) {
-                                    val fileName = "cqust-schedule-${release.tagName}-arm64-v8a.apk"
-                                    val title = context.getString(R.string.about_download_notification_title, release.tagName)
-                                    val desc = context.getString(R.string.about_download_notification_desc)
-                                    val started = AppActionHelper.downloadWithSystemManager(
-                                        context = context,
-                                        url = targetUrl,
-                                        fileName = fileName,
-                                        title = title,
-                                        description = desc
-                                    )
-                                    if (started) {
-                                        scope.launch {
+                                scope.launch {
+                                    val finalUrl = if (isApk) {
+                                        UpdateCheckService.resolveDownloadUrl(targetUrl)
+                                    } else {
+                                        targetUrl
+                                    }
+
+                                    if (isApk) {
+                                        val fileName = "cqust-schedule-${release.tagName}-arm64-v8a.apk"
+                                        val title = context.getString(R.string.about_download_notification_title, release.tagName)
+                                        val desc = context.getString(R.string.about_download_notification_desc)
+                                        val started = AppActionHelper.downloadWithSystemManager(
+                                            context = context,
+                                            url = finalUrl,
+                                            fileName = fileName,
+                                            title = title,
+                                            description = desc
+                                        )
+                                        if (started) {
                                             snackbarHostState.showSnackbar(
                                                 context.getString(R.string.about_download_started_toast)
                                             )
+                                        } else {
+                                            AppActionHelper.openBrowser(context, finalUrl)
                                         }
                                     } else {
-                                        AppActionHelper.openBrowser(context, targetUrl)
+                                        AppActionHelper.openBrowser(context, finalUrl)
                                     }
-                                } else {
-                                    AppActionHelper.openBrowser(context, targetUrl)
                                 }
                             },
                             modifier = Modifier.weight(1f)

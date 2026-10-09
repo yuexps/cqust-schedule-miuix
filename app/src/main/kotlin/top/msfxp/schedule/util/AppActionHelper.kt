@@ -43,6 +43,100 @@ object AppActionHelper {
         }
     }
 
+    private const val PREFS_DOWNLOAD = "app_download_prefs"
+    private const val KEY_LAST_APK_DOWNLOAD_ID = "last_apk_download_id"
+    private const val KEY_PENDING_INSTALL_URI = "pending_install_apk_uri"
+
+    // 记录本 App 发起的 APK 下载任务 ID
+    fun markApkDownloadId(context: Context, downloadId: Long) {
+        context.getSharedPreferences(PREFS_DOWNLOAD, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_LAST_APK_DOWNLOAD_ID, downloadId)
+            .apply()
+    }
+
+    // 检查是否属于本 App 跟踪的 APK 下载任务
+    fun isManagedApkDownload(context: Context, downloadId: Long): Boolean {
+        val savedId = context.getSharedPreferences(PREFS_DOWNLOAD, Context.MODE_PRIVATE)
+            .getLong(KEY_LAST_APK_DOWNLOAD_ID, -1L)
+        return savedId != -1L && savedId == downloadId
+    }
+
+    // 记录等待安装的 APK URI (用于用户授权返回后自动继续安装)
+    fun savePendingInstallApkUri(context: Context, uriString: String) {
+        context.getSharedPreferences(PREFS_DOWNLOAD, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_PENDING_INSTALL_URI, uriString)
+            .apply()
+    }
+
+    // 获取并清除待安装的 APK URI
+    fun consumePendingInstallApkUri(context: Context): String? {
+        val prefs = context.getSharedPreferences(PREFS_DOWNLOAD, Context.MODE_PRIVATE)
+        val uri = prefs.getString(KEY_PENDING_INSTALL_URI, null)
+        if (!uri.isNullOrBlank()) {
+            prefs.edit().remove(KEY_PENDING_INSTALL_URI).apply()
+        }
+        return uri
+    }
+
+    // 调起应用安装器 (若未授权则跳转设置并在返回后自动继续)
+    fun installApk(context: Context, apkUri: Uri) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+            savePendingInstallApkUri(context, apkUri.toString())
+            android.widget.Toast.makeText(
+                context,
+                context.getString(top.msfxp.schedule.R.string.about_install_permission_tip),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            val settingsIntent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                context.startActivity(settingsIntent)
+            } catch (_: Exception) {
+                launchInstallIntent(context, apkUri)
+            }
+            return
+        }
+
+        launchInstallIntent(context, apkUri)
+    }
+
+    // 执行安装意图
+    fun launchInstallIntent(context: Context, apkUri: Uri) {
+        try {
+            android.widget.Toast.makeText(
+                context,
+                context.getString(top.msfxp.schedule.R.string.about_install_started_toast),
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(installIntent)
+        } catch (_: Exception) {
+            android.widget.Toast.makeText(
+                context,
+                context.getString(top.msfxp.schedule.R.string.about_install_failed_toast),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    // 检查并恢复待安装任务 (用户授权返回时调用)
+    fun resumePendingInstallIfNeeded(context: Context) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && context.packageManager.canRequestPackageInstalls()) {
+            val pendingUri = consumePendingInstallApkUri(context)
+            if (!pendingUri.isNullOrBlank()) {
+                launchInstallIntent(context, Uri.parse(pendingUri))
+            }
+        }
+    }
+
     // 调用系统下载管理器直接下载文件
     fun downloadWithSystemManager(
         context: Context,
@@ -63,7 +157,8 @@ object AppActionHelper {
                 setAllowedOverMetered(true)
                 setAllowedOverRoaming(true)
             }
-            downloadManager.enqueue(request)
+            val downloadId = downloadManager.enqueue(request)
+            markApkDownloadId(context, downloadId)
             true
         } catch (_: Exception) {
             false
