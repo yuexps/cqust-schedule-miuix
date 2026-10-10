@@ -245,7 +245,8 @@ object LocalCrypto {
             System.arraycopy(iv, 0, combined, 0, iv.size)
             System.arraycopy(cipherText, 0, combined, iv.size, cipherText.size)
             android.util.Base64.encodeToString(combined, android.util.Base64.NO_WRAP)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.e("LocalCrypto", "KeyStore encryption failed, fallback to raw", e)
             rawText
         }
     }
@@ -262,7 +263,8 @@ object LocalCrypto {
             val spec = javax.crypto.spec.GCMParameterSpec(GCM_TAG_LENGTH, iv)
             cipher.init(javax.crypto.Cipher.DECRYPT_MODE, getOrCreateSecretKey(), spec)
             String(cipher.doFinal(cipherText), Charsets.UTF_8)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.e("LocalCrypto", "KeyStore decryption failed, fallback to encrypted", e)
             encryptedText
         }
     }

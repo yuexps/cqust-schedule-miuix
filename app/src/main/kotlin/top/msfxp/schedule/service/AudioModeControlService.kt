@@ -91,7 +91,9 @@ class AudioModeControlService : Service() {
             } finally {
                 try {
                     ServiceCompat.stopForeground(this@AudioModeControlService, ServiceCompat.STOP_FOREGROUND_REMOVE)
-                } catch (_: Exception) {}
+                } catch (e: Exception) {
+                    Log.w(TAG, "stopForeground in finally failed: ${e.message}")
+                }
                 stopSelf(startId)
             }
         }
@@ -103,7 +105,9 @@ class AudioModeControlService : Service() {
         super.onTimeout(startId)
         try {
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "stopForeground on timeout failed: ${e.message}")
+        }
         stopSelf(startId)
     }
 

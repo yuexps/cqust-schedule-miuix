@@ -53,9 +53,13 @@ class WeeklyScheduleViewModel(
     private val _syncMessage = MutableStateFlow<String?>(null)
 
     init {
-        // 启动时确保默认课表存在并后台静默同步
+        // 启动时确保默认课表存在、补全学期开学日期并后台静默同步
         viewModelScope.launch(Dispatchers.IO) {
             scheduleRepository.getOrCreateDefaultTableId()
+            val currentSemester = scheduleRepository.getCurrentSemesterOnce()
+            if (currentSemester != null && currentSemester.startDate.isBlank()) {
+                scheduleRepository.updateSemesterStartDate(currentSemester.id, currentSemester.effectiveStartDate.toString())
+            }
             cqustSyncManager.silentSyncIfNeeded(cooldownHours = 12L)
         }
     }
@@ -80,13 +84,6 @@ class WeeklyScheduleViewModel(
         val today = LocalDate.now()
         val totalWeeks = currentSemester?.totalWeeks ?: 20
         val parsedStart = currentSemester.effectiveStartDate
-
-        // 补全学期开学日期
-        if (currentSemester != null && currentSemester.startDate.isBlank()) {
-            viewModelScope.launch(Dispatchers.IO) {
-                scheduleRepository.updateSemesterStartDate(currentSemester.id, parsedStart.toString())
-            }
-        }
 
         val currWeek = SemesterDateHelper.calculateWeekNumber(
             startDate = parsedStart,

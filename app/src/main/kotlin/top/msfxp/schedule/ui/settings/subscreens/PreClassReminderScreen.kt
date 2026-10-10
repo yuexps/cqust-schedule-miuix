@@ -47,12 +47,24 @@ fun PreClassReminderScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // 生命周期返回时刷新权限状态
+    // 生命周期返回时刷新权限状态并处理待确认开启
     var refreshTrigger by remember { mutableIntStateOf(0) }
+    var pendingEnableOnResume by remember { mutableStateOf(false) }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 refreshTrigger++
+                if (pendingEnableOnResume) {
+                    if (PermissionHelper.isNotificationGranted(context)) {
+                        viewModel.updateReminderEnabled(true)
+                    } else {
+                        scope.launch {
+                            snackbarHostState.showSnackbar(context.getString(R.string.reminder_permission_notice_toast))
+                        }
+                    }
+                    pendingEnableOnResume = false
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -125,15 +137,18 @@ fun PreClassReminderScreen(
                             checked = settings.reminderEnabled,
                             onCheckedChange = { enable ->
                                 if (enable) {
-                                    if (!isNotificationEnabled) {
+                                    if (isNotificationEnabled) {
+                                        viewModel.updateReminderEnabled(true)
+                                    } else {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                             postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                         } else {
+                                            pendingEnableOnResume = true
                                             PermissionHelper.openNotificationSettings(context)
                                         }
                                     }
-                                    viewModel.updateReminderEnabled(true)
                                 } else {
+                                    pendingEnableOnResume = false
                                     viewModel.updateReminderEnabled(false)
                                 }
                             }

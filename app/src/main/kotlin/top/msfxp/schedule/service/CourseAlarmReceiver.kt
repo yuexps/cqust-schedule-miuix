@@ -51,6 +51,7 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_DISMISS_NOTIFICATION = "top.msfxp.schedule.ACTION_DISMISS_NOTIFICATION"
         private const val PREFS_AUTO_SILENT_STATE = "cqust_auto_silent_state"
         private const val KEY_PREV_RINGER_MODE = "prev_ringer_mode"
+        private const val KEY_WAS_MUTED_BY_APP = "was_muted_by_app"
 
         // 切换系统免打扰或静音模式
         fun toggleMode(context: Context, isEnabled: Boolean, modeType: AutoControlMode) {
@@ -76,7 +77,12 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
                         if (isEnabled) {
                             val currentMode = audioManager.ringerMode
                             if (currentMode != AudioManager.RINGER_MODE_SILENT) {
-                                sp.edit().putInt(KEY_PREV_RINGER_MODE, currentMode).apply()
+                                sp.edit()
+                                    .putInt(KEY_PREV_RINGER_MODE, currentMode)
+                                    .putBoolean(KEY_WAS_MUTED_BY_APP, true)
+                                    .apply()
+                            } else {
+                                sp.edit().putBoolean(KEY_WAS_MUTED_BY_APP, false).apply()
                             }
                             audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
                             try {
@@ -86,14 +92,18 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
                                 Log.w(TAG, "Auxiliary stream mute failed: ${e.message}")
                             }
                         } else {
-                            val prevMode = sp.getInt(KEY_PREV_RINGER_MODE, AudioManager.RINGER_MODE_NORMAL)
-                            audioManager.ringerMode = prevMode
-                            try {
-                                audioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0)
-                                audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Auxiliary stream unmute failed: ${e.message}")
+                            val wasMutedByApp = sp.getBoolean(KEY_WAS_MUTED_BY_APP, false)
+                            if (wasMutedByApp) {
+                                val prevMode = sp.getInt(KEY_PREV_RINGER_MODE, AudioManager.RINGER_MODE_NORMAL)
+                                audioManager.ringerMode = prevMode
+                                try {
+                                    audioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0)
+                                    audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Auxiliary stream unmute failed: ${e.message}")
+                                }
                             }
+                            sp.edit().remove(KEY_PREV_RINGER_MODE).remove(KEY_WAS_MUTED_BY_APP).apply()
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Toggle silent mode failed", e)

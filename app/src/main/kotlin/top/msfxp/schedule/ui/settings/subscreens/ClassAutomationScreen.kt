@@ -8,6 +8,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -54,13 +55,27 @@ fun ClassAutomationScreen(
     val settings = uiState.appSettings
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    // 生命周期返回时刷新权限状态
+    // 生命周期返回时刷新权限状态并处理待确认开启
     var refreshTrigger by remember { mutableIntStateOf(0) }
+    var pendingEnableOnResume by remember { mutableStateOf(false) }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 refreshTrigger++
+                if (pendingEnableOnResume) {
+                    if (PermissionHelper.isDndAccessGranted(context)) {
+                        viewModel.updateAutoDndEnabled(true)
+                    } else {
+                        scope.launch {
+                            snackbarHostState.showSnackbar(context.getString(R.string.automation_test_dnd_permission_toast))
+                        }
+                    }
+                    pendingEnableOnResume = false
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -83,9 +98,6 @@ fun ClassAutomationScreen(
     val selectedModeIndex = remember(settings.autoControlMode) {
         if (settings.autoControlMode == AutoControlMode.DND) 1 else 0
     }
-
-    val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
@@ -124,10 +136,16 @@ fun ClassAutomationScreen(
                             summary = stringResource(R.string.automation_switch_desc),
                             checked = settings.autoDndEnabled,
                             onCheckedChange = { enabled ->
-                                viewModel.updateAutoDndEnabled(enabled)
-                                if (enabled && !hasDndPermission) {
-                                    scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.automation_test_dnd_permission_toast)) }
-                                    PermissionHelper.openDndSettings(context)
+                                if (enabled) {
+                                    if (hasDndPermission) {
+                                        viewModel.updateAutoDndEnabled(true)
+                                    } else {
+                                        pendingEnableOnResume = true
+                                        PermissionHelper.openDndSettings(context)
+                                    }
+                                } else {
+                                    pendingEnableOnResume = false
+                                    viewModel.updateAutoDndEnabled(false)
                                 }
                             }
                         )

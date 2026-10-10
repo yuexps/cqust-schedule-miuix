@@ -11,11 +11,13 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 
 // 权限检测与系统设置跳转工具类
 object PermissionHelper {
+    private const val TAG = "PermissionHelper"
 
     // 检测通知权限
     fun isNotificationGranted(context: Context): Boolean {
@@ -119,7 +121,9 @@ object PermissionHelper {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(intent)
                 return
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.w(TAG, "Start vendor autostart intent failed: ${e.message}")
+            }
         }
         openAppDetailsSettings(context)
     }
@@ -134,7 +138,9 @@ object PermissionHelper {
                 }
                 context.startActivity(requestDialogIntent)
                 return
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.w(TAG, "Request ignore battery optimizations dialog failed: ${e.message}")
+            }
         }
 
         try {
@@ -143,7 +149,9 @@ object PermissionHelper {
             }
             context.startActivity(listIntent)
             return
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Open ignore battery optimization list failed: ${e.message}")
+        }
 
         openAppDetailsSettings(context)
     }
@@ -156,6 +164,8 @@ object PermissionHelper {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            Log.e(TAG, "Open app details settings failed: ${e.message}")
+        }
     }
 }
