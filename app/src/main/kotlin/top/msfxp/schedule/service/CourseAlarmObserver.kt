@@ -8,6 +8,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -23,11 +24,20 @@ class CourseAlarmObserver(
     private val calendarSyncHelper: CalendarSyncHelper,
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 ) {
-    private data class ScheduleTriggerParams(
+    // 自动化调度与小组件触发参数
+    private data class AutomationTriggerParams(
         val reminderEnabled: Boolean,
         val remindBeforeMinutes: Int,
         val autoDndEnabled: Boolean,
-        val autoSyncToCalendar: Boolean,
+        val semesterId: String?,
+        val semesterStartDate: String?,
+        val totalWeeks: Int?,
+        val coursesHash: Int,
+        val adjustmentsHash: Int
+    )
+
+    // 纯课表课程排课数据参数（仅用于日历同步）
+    private data class CourseScheduleDataParams(
         val semesterId: String?,
         val semesterStartDate: String?,
         val totalWeeks: Int?,
@@ -42,17 +52,17 @@ class CourseAlarmObserver(
             scheduleRepository.getAllAdjustmentsWithMetaFlow(semesterId = semester?.id.orEmpty())
         }
 
+        // 1. 课前提醒与免打扰自动化排程、小组件刷新管道
         combine(
             settingsRepository.appSettingsFlow,
             scheduleRepository.currentSemesterFlow,
             scheduleRepository.allCoursesFlow,
             adjustmentsWithSemesterFlow
         ) { settings, semester, courses, adjustments ->
-            ScheduleTriggerParams(
+            AutomationTriggerParams(
                 reminderEnabled = settings.reminderEnabled,
                 remindBeforeMinutes = settings.remindBeforeMinutes,
                 autoDndEnabled = settings.autoDndEnabled,
-                autoSyncToCalendar = settings.autoSyncToCalendar,
                 semesterId = semester?.id,
                 semesterStartDate = semester?.startDate,
                 totalWeeks = semester?.totalWeeks,
@@ -62,10 +72,32 @@ class CourseAlarmObserver(
         }
             .distinctUntilChanged()
             .debounce(500L)
-            .onEach { params ->
+            .onEach {
                 DndSchedulerWorker.triggerImmediately(context)
                 updateAllAppWidgets(context)
-                if (params.autoSyncToCalendar && calendarSyncHelper.hasCalendarPermission()) {
+            }
+            .launchIn(scope)
+
+        // 2. 日历自动同步管道：仅在课表课程排课数据发生变动时触发
+        combine(
+            scheduleRepository.currentSemesterFlow,
+            scheduleRepository.allCoursesFlow,
+            adjustmentsWithSemesterFlow
+        ) { semester, courses, adjustments ->
+            CourseScheduleDataParams(
+                semesterId = semester?.id,
+                semesterStartDate = semester?.startDate,
+                totalWeeks = semester?.totalWeeks,
+                coursesHash = courses.hashCode(),
+                adjustmentsHash = adjustments.hashCode()
+            )
+        }
+            .distinctUntilChanged()
+            .drop(1)
+            .debounce(500L)
+            .onEach {
+                val settings = settingsRepository.getAppSettingsOnce()
+                if (settings.autoSyncToCalendar && calendarSyncHelper.hasCalendarPermission()) {
                     calendarSyncHelper.syncCurrentScheduleToCalendar()
                 }
             }

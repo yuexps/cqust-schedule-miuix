@@ -51,8 +51,8 @@
 ---
 
 ### 2.4 系统服务与小组件 (`service`, `widget`)
-- [service/CalendarSyncHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CalendarSyncHelper.kt)：系统日历账户创建与全量课程事件双向增删同步。
-- [service/CourseAlarmObserver.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CourseAlarmObserver.kt)：监听课表变更并按设置重调所有课前提醒闹钟。
+- [service/CalendarSyncHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CalendarSyncHelper.kt)：系统日历账户创建、精细化增量更新（Diff Sync）与提醒去重自愈。
+- [service/CourseAlarmObserver.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CourseAlarmObserver.kt)：课表自动化监听器，分流解耦处理免打扰排程、小组件刷新及课程数据变动时的日历同步。
 - [service/CourseAlarmReceiver.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CourseAlarmReceiver.kt)：课前提醒通知推送与上课自动免打扰/静音切换广播接收器。
 - [service/DndSchedulerWorker.kt](../app/src/main/kotlin/top/msfxp/schedule/service/DndSchedulerWorker.kt)：WorkManager 定时后台任务，每日自动对齐注册课堂免打扰排程。
 - [widget/WidgetProviders.kt](../app/src/main/kotlin/top/msfxp/schedule/widget/WidgetProviders.kt)：桌面小组件 AppWidgetProvider 与即时广播接收器。

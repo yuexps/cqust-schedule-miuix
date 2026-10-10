@@ -147,6 +147,8 @@
     <string name="calendar_delete_dialog_confirm">删除</string>
     <string name="calendar_delete_success_toast">已从系统日历中删除课程日程与账户</string>
     <string name="calendar_delete_fail_toast">删除失败，请检查日历权限</string>
+    <string name="calendar_event_desc_adjusted">【临时调课安排】</string>
+    <string name="calendar_event_desc_teacher_format">教师: %1$s</string>
 
     <!-- 课前提醒设置子页面 -->
     <string name="reminder_title">课前通知提醒</string>
