@@ -325,18 +325,22 @@ class SettingsViewModel(
     // 立即测试切换控制模式并在10秒后自动恢复
     fun testToggleModeImmediately(context: android.content.Context) {
         viewModelScope.launch {
-            val mode = _uiState.value.appSettings.autoControlMode
-            top.msfxp.schedule.service.CourseAlarmReceiver.toggleMode(context, true, mode)
-            kotlinx.coroutines.delay(10_000L)
-            top.msfxp.schedule.service.CourseAlarmReceiver.toggleMode(context, false, mode)
+            try {
+                val mode = _uiState.value.appSettings.autoControlMode
+                top.msfxp.schedule.service.AudioModeControlService.start(context, true, mode)
+                kotlinx.coroutines.delay(10_000L)
+                top.msfxp.schedule.service.AudioModeControlService.start(context, false, mode)
+            } catch (e: Exception) {
+                android.util.Log.e("SettingsViewModel", "testToggleModeImmediately failed", e)
+            }
         }
     }
 
-    // 设置 60 秒后后台定时测试勿扰/静音闹钟
-    fun scheduleDelayed60sDndTest(context: android.content.Context) {
+    // 设置 30 秒后后台定时测试勿扰/静音闹钟
+    fun scheduleDelayed30sDndTest(context: android.content.Context) {
         viewModelScope.launch {
             val alarmManager = context.getSystemService(android.app.AlarmManager::class.java) ?: return@launch
-            val startMillis = System.currentTimeMillis() + 60_000L
+            val startMillis = System.currentTimeMillis() + 30_000L
             val endMillis = startMillis + 30_000L
 
             val startIntent = android.content.Intent(context, top.msfxp.schedule.service.CourseAlarmReceiver::class.java).apply {

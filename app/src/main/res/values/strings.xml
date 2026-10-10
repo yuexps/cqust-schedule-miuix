@@ -175,12 +175,14 @@
     <string name="automation_test_immediate_title">立即测试切换模式</string>
     <string name="automation_test_immediate_desc">立即切换为静音/勿扰，10秒后自动恢复正常</string>
     <string name="automation_test_delayed_title">后台切换模式测试</string>
-    <string name="automation_test_delayed_desc">设定60秒后闹钟唤醒切换模式，30秒后恢复，可杀掉后台测试</string>
+    <string name="automation_test_delayed_desc">设定30秒后闹钟唤醒切换模式，30秒后恢复，可杀掉后台测试</string>
     <string name="automation_test_immediate_toast">已切换为测试模式，10秒后将自动恢复</string>
-    <string name="automation_test_delayed_scheduled_toast">已设定60秒后闹钟唤醒，现在可以杀掉后台测试</string>
+    <string name="automation_test_delayed_scheduled_toast">已设定30秒后闹钟唤醒，现在可以杀掉后台测试</string>
     <string name="automation_test_dnd_permission_toast">请先开启勿扰策略权限</string>
     <string name="automation_test_alarm_permission_toast">请先开启精确闹钟权限</string>
     <string name="automation_hint_text">需在“权限管理”中开启精确闹钟与后台运行权限，以确保准时生效。\n• 自动静音：上课期间切换为静音或振动，下课后恢复正常响铃；\n• 勿扰模式：上课期间屏蔽通知与来电打扰，下课后自动关闭勿扰。</string>
+    <string name="channel_audio_control_service">课中自动化</string>
+    <string name="notification_audio_control_running">正在切换静音模式…</string>
 
     <!-- 权限管理子页面 -->
     <string name="perm_title">权限管理</string>
@@ -202,8 +204,8 @@
     <string name="perm_battery_granted">已开启 · 避免被系统省电策略休眠</string>
     <string name="perm_battery_denied">未开启 · 点击前往允许后台无限制运行</string>
     <string name="perm_hint_text">说明：小米、荣耀、OPPO、vivo 等系统具有较严格的后台省电策略，建议开启自启动并将省电策略设为“无限制”，以确保每天课前提醒与课中自动化准时生效。</string>
-    <string name="perm_show_test_features_title">开启测试功能</string>
-    <string name="perm_show_test_features_desc">开启用于联调的模拟测试项</string>
+    <string name="perm_show_test_features_title">测试功能</string>
+    <string name="perm_show_test_features_desc">用于联调的模拟测试项</string>
 
     <!-- 课程总览与详情页面 -->
     <string name="course_overview_title">课程总览</string>

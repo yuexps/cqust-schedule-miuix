@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import top.msfxp.schedule.data.model.AutoControlMode
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import top.msfxp.schedule.widget.updateAllAppWidgets
@@ -29,6 +30,7 @@ class CourseAlarmObserver(
         val reminderEnabled: Boolean,
         val remindBeforeMinutes: Int,
         val autoDndEnabled: Boolean,
+        val autoControlMode: AutoControlMode,
         val semesterId: String?,
         val semesterStartDate: String?,
         val totalWeeks: Int?,
@@ -63,6 +65,7 @@ class CourseAlarmObserver(
                 reminderEnabled = settings.reminderEnabled,
                 remindBeforeMinutes = settings.remindBeforeMinutes,
                 autoDndEnabled = settings.autoDndEnabled,
+                autoControlMode = settings.autoControlMode,
                 semesterId = semester?.id,
                 semesterStartDate = semester?.startDate,
                 totalWeeks = semester?.totalWeeks,

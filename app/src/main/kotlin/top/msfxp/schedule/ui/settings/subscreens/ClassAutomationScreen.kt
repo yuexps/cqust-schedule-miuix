@@ -183,7 +183,7 @@ fun ClassAutomationScreen(
                                         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.automation_test_alarm_permission_toast)) }
                                         PermissionHelper.openExactAlarmSettings(context)
                                     } else {
-                                        viewModel.scheduleDelayed60sDndTest(context)
+                                        viewModel.scheduleDelayed30sDndTest(context)
                                         scope.launch {
                                             snackbarHostState.showSnackbar(context.getString(R.string.automation_test_delayed_scheduled_toast))
                                         }

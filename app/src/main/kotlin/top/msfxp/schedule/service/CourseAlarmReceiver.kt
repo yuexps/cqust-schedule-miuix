@@ -49,6 +49,8 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
         const val DND_ACTION_END = "dnd_action_end"
 
         const val ACTION_DISMISS_NOTIFICATION = "top.msfxp.schedule.ACTION_DISMISS_NOTIFICATION"
+        private const val PREFS_AUTO_SILENT_STATE = "cqust_auto_silent_state"
+        private const val KEY_PREV_RINGER_MODE = "prev_ringer_mode"
 
         // 切换系统免打扰或静音模式
         fun toggleMode(context: Context, isEnabled: Boolean, modeType: AutoControlMode) {
@@ -59,14 +61,43 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
 
             when (modeType) {
                 AutoControlMode.DND -> {
-                    notificationManager.setInterruptionFilter(
-                        if (isEnabled) NotificationManager.INTERRUPTION_FILTER_PRIORITY
-                        else NotificationManager.INTERRUPTION_FILTER_ALL
-                    )
+                    try {
+                        notificationManager.setInterruptionFilter(
+                            if (isEnabled) NotificationManager.INTERRUPTION_FILTER_PRIORITY
+                            else NotificationManager.INTERRUPTION_FILTER_ALL
+                        )
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Toggle DND filter failed", e)
+                    }
                 }
                 AutoControlMode.SILENT -> {
-                    audioManager.ringerMode = if (isEnabled) AudioManager.RINGER_MODE_SILENT
-                    else AudioManager.RINGER_MODE_NORMAL
+                    try {
+                        val sp = context.getSharedPreferences(PREFS_AUTO_SILENT_STATE, Context.MODE_PRIVATE)
+                        if (isEnabled) {
+                            val currentMode = audioManager.ringerMode
+                            if (currentMode != AudioManager.RINGER_MODE_SILENT) {
+                                sp.edit().putInt(KEY_PREV_RINGER_MODE, currentMode).apply()
+                            }
+                            audioManager.ringerMode = AudioManager.RINGER_MODE_SILENT
+                            try {
+                                audioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_MUTE, 0)
+                                audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_MUTE, 0)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Auxiliary stream mute failed: ${e.message}")
+                            }
+                        } else {
+                            val prevMode = sp.getInt(KEY_PREV_RINGER_MODE, AudioManager.RINGER_MODE_NORMAL)
+                            audioManager.ringerMode = prevMode
+                            try {
+                                audioManager.adjustStreamVolume(AudioManager.STREAM_RING, AudioManager.ADJUST_UNMUTE, 0)
+                                audioManager.adjustStreamVolume(AudioManager.STREAM_NOTIFICATION, AudioManager.ADJUST_UNMUTE, 0)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Auxiliary stream unmute failed: ${e.message}")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Toggle silent mode failed", e)
+                    }
                 }
             }
         }
@@ -215,12 +246,10 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
                 val section = intent.getIntExtra(EXTRA_SECTION, -1)
                 val dateStr = intent.getStringExtra(EXTRA_DATE)
                 if (!hasActiveCourseAtSlot(dateStr, section)) return
-                toggleMode(context, true, mode)
-                updateAllAppWidgets(context)
+                AudioModeControlService.start(context, true, mode)
             }
             DND_ACTION_END -> {
-                toggleMode(context, false, mode)
-                updateAllAppWidgets(context)
+                AudioModeControlService.start(context, false, mode)
             }
         }
     }

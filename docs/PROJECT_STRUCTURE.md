@@ -51,6 +51,7 @@
 ---
 
 ### 2.4 系统服务与小组件 (`service`, `widget`)
+- [service/AudioModeControlService.kt](../app/src/main/kotlin/top/msfxp/schedule/service/AudioModeControlService.kt)：课程自动化音频模式切换短期前台服务（用于 Android 14+ / 17 后台音频强化提权切换静音）。
 - [service/CalendarSyncHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CalendarSyncHelper.kt)：系统日历账户创建、精细化增量更新（Diff Sync）与提醒去重自愈。
 - [service/CourseAlarmObserver.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CourseAlarmObserver.kt)：课表自动化监听器，分流解耦处理免打扰排程、小组件刷新及课程数据变动时的日历同步。
 - [service/CourseAlarmReceiver.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CourseAlarmReceiver.kt)：课前提醒通知推送与上课自动免打扰/静音切换广播接收器。
