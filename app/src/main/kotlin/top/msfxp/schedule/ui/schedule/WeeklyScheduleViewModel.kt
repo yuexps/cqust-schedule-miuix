@@ -6,13 +6,17 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import top.msfxp.schedule.BuildConfig
 import top.msfxp.schedule.R
+import top.msfxp.schedule.data.api.AppRelease
 import top.msfxp.schedule.data.api.CqustSyncManager
 import top.msfxp.schedule.data.api.LocalCrypto
+import top.msfxp.schedule.data.api.UpdateCheckService
 import top.msfxp.schedule.data.model.*
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.applyAdjustmentsToWeekEvents
 import top.msfxp.schedule.data.repository.SettingsRepository
+import top.msfxp.schedule.util.AppActionHelper
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -52,8 +56,14 @@ class WeeklyScheduleViewModel(
     private val _isSyncing = MutableStateFlow(false)
     private val _syncMessage = MutableStateFlow<String?>(null)
 
+    private val _updateRelease = MutableStateFlow<AppRelease?>(null)
+    val updateRelease: StateFlow<AppRelease?> = _updateRelease.asStateFlow()
+
+    private val _showUpdateDialog = MutableStateFlow(false)
+    val showUpdateDialog: StateFlow<Boolean> = _showUpdateDialog.asStateFlow()
+
     init {
-        // 启动时确保默认课表存在、补全学期开学日期并后台静默同步
+        // 启动时确保默认课表存在、补全学期开学日期、后台静默同步课表与冷却静默检查更新
         viewModelScope.launch(Dispatchers.IO) {
             scheduleRepository.getOrCreateDefaultTableId()
             val currentSemester = scheduleRepository.getCurrentSemesterOnce()
@@ -61,6 +71,17 @@ class WeeklyScheduleViewModel(
                 scheduleRepository.updateSemesterStartDate(currentSemester.id, currentSemester.effectiveStartDate.toString())
             }
             cqustSyncManager.silentSyncIfNeeded(cooldownHours = 12L)
+
+            // 间隔 24 小时自动静默检查新版本，发现新版本时在主课表首页主动呼起弹窗
+            val newRelease = UpdateCheckService.silentCheckUpdateIfNeeded(
+                settingsRepository = settingsRepository,
+                localVersionName = BuildConfig.VERSION_NAME,
+                cooldownHours = 24L
+            )
+            if (newRelease != null) {
+                _updateRelease.value = newRelease
+                _showUpdateDialog.value = true
+            }
         }
     }
 
@@ -310,5 +331,20 @@ class WeeklyScheduleViewModel(
             }
         }
         return null
+    }
+
+    // 关闭更新弹窗
+    fun dismissUpdateDialog() {
+        _showUpdateDialog.value = false
+    }
+
+    // 执行安装包下载操作
+    fun executeDownload(
+        context: Context,
+        onNotify: (String) -> Unit
+    ) {
+        val release = _updateRelease.value ?: return
+        dismissUpdateDialog()
+        AppActionHelper.processReleaseDownload(context, release, onNotify)
     }
 }

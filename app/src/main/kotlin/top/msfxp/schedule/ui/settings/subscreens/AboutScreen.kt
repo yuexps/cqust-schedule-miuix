@@ -24,12 +24,10 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.msfxp.schedule.R
-import top.msfxp.schedule.data.api.UpdateCheckService
 import top.msfxp.schedule.ui.settings.AboutViewModel
 import top.msfxp.schedule.ui.settings.UpdateCheckState
 import top.msfxp.schedule.util.AppActionHelper
 import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.preference.ArrowPreference
@@ -61,12 +59,21 @@ fun AboutScreen(
                 )
             }
             UpdateCheckState.FAILED -> {
-                val reason = uiState.errorMessage ?: context.getString(R.string.sync_failed_default)
+                val reason = uiState.errorMessageResId?.let { context.getString(it) }
+                    ?: uiState.errorMessage
+                    ?: context.getString(R.string.sync_failed_default)
                 snackbarHostState.showSnackbar(
                     context.getString(R.string.about_update_check_failed, reason)
                 )
             }
             else -> {}
+        }
+    }
+
+    // 监听降级等即时 Toast 提示事件
+    LaunchedEffect(Unit) {
+        viewModel.toastMessageResId.collect { resId ->
+            android.widget.Toast.makeText(context, context.getString(resId), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -174,11 +181,13 @@ fun AboutScreen(
                             UpdateCheckState.CHECKING -> stringResource(R.string.about_desc_check_update_checking)
                             UpdateCheckState.LATEST -> stringResource(R.string.about_desc_check_update_latest)
                             UpdateCheckState.HAS_NEW_VERSION -> stringResource(
-                                R.string.about_desc_check_update_has_new,
+                                R.string.about_update_has_new,
                                 uiState.latestRelease?.tagName.orEmpty()
                             )
                             UpdateCheckState.FAILED -> {
-                                val reason = uiState.errorMessage ?: stringResource(R.string.sync_failed_default)
+                                val reason = uiState.errorMessageResId?.let { stringResource(it) }
+                                    ?: uiState.errorMessage
+                                    ?: stringResource(R.string.sync_failed_default)
                                 stringResource(R.string.about_update_check_failed, reason)
                             }
                             else -> stringResource(R.string.about_desc_check_update_idle)
@@ -188,7 +197,7 @@ fun AboutScreen(
                             title = stringResource(R.string.about_item_check_update),
                             summary = updateSummary,
                             onClick = {
-                                viewModel.checkForUpdates(manual = true)
+                                viewModel.onCheckUpdateClicked()
                             }
                         )
 
@@ -274,7 +283,7 @@ fun AboutScreen(
             val release = uiState.latestRelease!!
             WindowDialog(
                 show = true,
-                title = stringResource(R.string.about_update_dialog_title, release.tagName),
+                title = stringResource(R.string.about_update_has_new, release.tagName),
                 onDismissRequest = { viewModel.dismissUpdateDialog() }
             ) {
                 Column(
@@ -314,38 +323,9 @@ fun AboutScreen(
                         )
                         Button(
                             onClick = {
-                                viewModel.dismissUpdateDialog()
-                                val targetUrl = uiState.directApkDownloadUrl ?: release.htmlUrl
-                                val isApk = targetUrl.endsWith(".apk", ignoreCase = true) ||
-                                        release.assets.any { it.browserDownloadUrl == targetUrl }
-
-                                scope.launch {
-                                    val finalUrl = if (isApk) {
-                                        UpdateCheckService.resolveDownloadUrl(targetUrl)
-                                    } else {
-                                        targetUrl
-                                    }
-
-                                    if (isApk) {
-                                        val fileName = "cqust-schedule-${release.tagName}-arm64-v8a.apk"
-                                        val title = context.getString(R.string.about_download_notification_title, release.tagName)
-                                        val desc = context.getString(R.string.about_download_notification_desc)
-                                        val started = AppActionHelper.downloadWithSystemManager(
-                                            context = context,
-                                            url = finalUrl,
-                                            fileName = fileName,
-                                            title = title,
-                                            description = desc
-                                        )
-                                        if (started) {
-                                            snackbarHostState.showSnackbar(
-                                                context.getString(R.string.about_download_started_toast)
-                                            )
-                                        } else {
-                                            AppActionHelper.openBrowser(context, finalUrl)
-                                        }
-                                    } else {
-                                        AppActionHelper.openBrowser(context, finalUrl)
+                                viewModel.executeDownload(context) { message ->
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(message)
                                     }
                                 }
                             },

@@ -1,0 +1,33 @@
+name: Sync to Gitee
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync-to-gitee:
+    name: Sync Repository to Gitee
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push to Gitee mirror
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          git remote add gitee "https://yuexps:${GITEE_TOKEN}@gitee.com/yuexps/cqust-schedule-miuix.git"
+          echo "Syncing branch to Gitee..."
+          git push --force gitee HEAD:main
+          echo "Syncing tags to Gitee..."
+          git push --force --tags gitee

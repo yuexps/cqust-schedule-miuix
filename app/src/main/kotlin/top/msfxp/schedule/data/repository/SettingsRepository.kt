@@ -90,6 +90,10 @@ class SettingsRepository(private val context: Context) {
             prefs[AppSettings.KEY_COURSE_CARD_ALPHA] = updated.courseCardAlpha
             prefs[AppSettings.KEY_CUSTOM_COURSE_COLORS_JSON] = updated.customCourseColorsJson
             prefs[AppSettings.KEY_SHOW_TEST_FEATURES] = updated.showTestFeatures
+            prefs[AppSettings.KEY_LATEST_VERSION_TAG] = updated.latestVersionTag
+            prefs[AppSettings.KEY_LATEST_VERSION_DOWNLOAD_URL] = updated.latestVersionDownloadUrl
+            prefs[AppSettings.KEY_LATEST_VERSION_BODY] = updated.latestVersionBody
+            prefs[AppSettings.KEY_LAST_UPDATE_CHECK_TIME] = updated.lastUpdateCheckTime
         }
     }
 
@@ -252,5 +256,32 @@ class SettingsRepository(private val context: Context) {
     // 重置课程配色为默认方案
     suspend fun resetCourseColors() {
         updateSettings { it.copy(customCourseColorsJson = "") }
+    }
+
+    // 保存最新版本更新信息
+    suspend fun saveLatestReleaseInfo(tag: String, downloadUrl: String, body: String) {
+        updateSettings {
+            it.copy(
+                latestVersionTag = tag,
+                latestVersionDownloadUrl = downloadUrl,
+                latestVersionBody = body
+            )
+        }
+    }
+
+    // 清除最新版本更新缓存
+    suspend fun clearLatestReleaseInfo() {
+        updateSettings {
+            it.copy(
+                latestVersionTag = "",
+                latestVersionDownloadUrl = "",
+                latestVersionBody = ""
+            )
+        }
+    }
+
+    // 更新上次检查更新时间戳
+    suspend fun updateLastUpdateCheckTime(time: Long) {
+        updateSettings { it.copy(lastUpdateCheckTime = time) }
     }
 }

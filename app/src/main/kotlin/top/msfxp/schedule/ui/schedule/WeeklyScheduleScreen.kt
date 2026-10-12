@@ -18,11 +18,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.window.WindowDialog
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.msfxp.schedule.R
@@ -47,6 +51,9 @@ fun WeeklyScheduleScreen(
     viewModel: WeeklyScheduleViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
+    val updateRelease by viewModel.updateRelease.collectAsState()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -375,4 +382,64 @@ fun WeeklyScheduleScreen(
         },
         onDismissRequest = { selectedBlockForDetail = null }
     )
+
+    // 发现新版本主动弹窗 (24小时静默检查发现新版本时触发)
+    if (showUpdateDialog && updateRelease != null) {
+        val release = updateRelease!!
+        WindowDialog(
+            show = true,
+            title = stringResource(R.string.about_update_has_new, release.tagName),
+            onDismissRequest = { viewModel.dismissUpdateDialog() }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                if (!release.body.isNullOrBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 240.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                            .padding(12.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = release.body.trim(),
+                            style = MiuixTheme.textStyles.body2,
+                            color = MiuixTheme.colorScheme.onSurface,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    TextButton(
+                        text = stringResource(R.string.about_update_dialog_btn_later),
+                        onClick = { viewModel.dismissUpdateDialog() },
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            viewModel.executeDownload(context) { message ->
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(message)
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(stringResource(R.string.about_update_dialog_btn_download))
+                    }
+                }
+            }
+        }
+    }
 }

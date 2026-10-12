@@ -337,11 +337,10 @@
     <string name="about_desc_check_update_idle">点击检查最新版本</string>
     <string name="about_desc_check_update_checking">正在检查更新…</string>
     <string name="about_desc_check_update_latest">当前已是最新版本</string>
-    <string name="about_desc_check_update_has_new">发现新版本 %1$s</string>
+    <string name="about_update_has_new">发现新版本 %1$s</string>
     <string name="about_item_qq_group">QQ交流群</string>
     <string name="about_desc_qq_group">重科课表 (767082393)</string>
     <string name="about_item_disclaimer">说明</string>
-    <string name="about_update_dialog_title">发现新版本 %1$s</string>
     <string name="about_update_dialog_btn_download">立即下载</string>
     <string name="about_update_dialog_btn_later">稍后再说</string>
     <string name="about_update_check_failed">检查更新失败: %1$s</string>
@@ -353,6 +352,11 @@
     <string name="about_download_notification_title">重科课表 %1$s</string>
     <string name="about_download_notification_desc">正在下载安装包…</string>
     <string name="about_install_started_toast">安装包下载完成，正在调起安装…</string>
+    <string name="about_apk_already_downloaded_toast">检测到安装包已就绪，正在调起安装…</string>
     <string name="about_install_failed_toast">无法打开安装包，请在文件管理器中手动安装</string>
     <string name="about_install_permission_tip">请允许安装未知应用以完成版本更新</string>
+    <string name="about_error_network_timeout">连接超时，请检查网络后重试</string>
+    <string name="about_error_rate_limited">接口访问频繁，请稍后再试</string>
+    <string name="about_error_network_failed">网络连接异常，请检查网络设置</string>
+    <string name="about_fallback_to_github_toast">Gitee 通道失败，降级 GitHub</string>
 </resources>

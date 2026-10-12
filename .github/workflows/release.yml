@@ -175,3 +175,47 @@ jobs:
           files: ${{ env.FINAL_APK_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync and Publish to Gitee Release
+        if: env.FINAL_APK_PATH != ''
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "GITEE_TOKEN not set, skipping Gitee release sync."
+            exit 0
+          fi
+
+          echo "Pushing code and tag to Gitee..."
+          git remote add gitee "https://yuexps:${GITEE_TOKEN}@gitee.com/yuexps/cqust-schedule-miuix.git" || true
+          git push --force gitee HEAD:main
+          git push --force gitee "${TAG_NAME}"
+
+          echo "Creating Gitee Release for ${TAG_NAME}..."
+          EXISTING_RELEASE=$(curl -s "https://gitee.com/api/v5/repos/yuexps/cqust-schedule-miuix/releases/tags/${TAG_NAME}?access_token=${GITEE_TOKEN}")
+          RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
+
+          if [ -z "$RELEASE_ID" ]; then
+            CREATE_PAYLOAD=$(jq -n \
+              --arg access_token "$GITEE_TOKEN" \
+              --arg tag_name "$TAG_NAME" \
+              --arg name "$RELEASE_TITLE" \
+              --arg body "$RELEASE_NOTES" \
+              '{access_token: $access_token, tag_name: $tag_name, name: $name, body: $body, prerelease: false}')
+
+            CREATE_RESP=$(curl -s -X POST "https://gitee.com/api/v5/repos/yuexps/cqust-schedule-miuix/releases" \
+              -H "Content-Type: application/json" \
+              -d "$CREATE_PAYLOAD")
+
+            RELEASE_ID=$(echo "$CREATE_RESP" | jq -r '.id // empty')
+          fi
+
+          if [ -n "$RELEASE_ID" ]; then
+            echo "Uploading APK attachment to Gitee Release $RELEASE_ID..."
+            UPLOAD_RESP=$(curl -s -X POST "https://gitee.com/api/v5/repos/yuexps/cqust-schedule-miuix/releases/${RELEASE_ID}/attach_files" \
+              -F "access_token=${GITEE_TOKEN}" \
+              -F "file=@${FINAL_APK_PATH}")
+            echo "Gitee Release upload completed."
+          else
+            echo "Failed to create or find Gitee release: $CREATE_RESP"
+          fi

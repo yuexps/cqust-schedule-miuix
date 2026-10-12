@@ -19,6 +19,7 @@
 # 本地数据模型与数据库实体保留
 -keep class top.msfxp.schedule.data.model.** { *; }
 -keep class top.msfxp.schedule.data.db.** { *; }
+-keep class top.msfxp.schedule.data.api.** { *; }
 
 # 桌面微件与后台服务保留
 -keep class * extends android.appwidget.AppWidgetProvider { *; }

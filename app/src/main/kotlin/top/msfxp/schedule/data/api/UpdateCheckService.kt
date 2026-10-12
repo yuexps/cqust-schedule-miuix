@@ -11,9 +11,9 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-// GitHub Release 资源文件模型
+// Release 资源文件模型
 @Serializable
-data class GithubAsset(
+data class AppAsset(
     @SerialName("name")
     val name: String = "",
     @SerialName("browser_download_url")
@@ -22,9 +22,9 @@ data class GithubAsset(
     val size: Long = 0L
 )
 
-// GitHub Release 数据模型
+// Release 数据模型
 @Serializable
-data class GithubRelease(
+data class AppRelease(
     @SerialName("tag_name")
     val tagName: String = "",
     @SerialName("name")
@@ -34,17 +34,16 @@ data class GithubRelease(
     @SerialName("html_url")
     val htmlUrl: String = "",
     @SerialName("assets")
-    val assets: List<GithubAsset> = emptyList()
+    val assets: List<AppAsset> = emptyList()
 )
 
-// 应用更新检查服务
+typealias GithubAsset = AppAsset
+typealias GithubRelease = AppRelease
+
+// 应用更新检查服务 (优先 Gitee 快速通道，降级 GitHub 官方源)
 object UpdateCheckService {
+    private const val GITEE_API_BASE = "https://gitee.com/api/v5/repos"
     private const val GITHUB_API_BASE = "https://api.github.com/repos"
-    private const val GITHUB_API_MIRROR = "https://gh.dpik.top/https://api.github.com/repos"
-    private val DOWNLOAD_MIRRORS = listOf(
-        "https://ghproxy.net/",
-        "https://gh-proxy.com/"
-    )
     private const val DEFAULT_OWNER = "yuexps"
     private const val DEFAULT_REPO = "cqust-schedule-miuix"
 
@@ -63,74 +62,57 @@ object UpdateCheckService {
         }
     }
 
-    // 检查是否有新版本 Release (直连失败自动使用镜像)
+    // 检查是否有新版本 Release (优先 Gitee，降级 GitHub)
     suspend fun fetchLatestRelease(
         owner: String = DEFAULT_OWNER,
-        repo: String = DEFAULT_REPO
-    ): Result<GithubRelease> {
-        val directUrl = "$GITHUB_API_BASE/$owner/$repo/releases/latest"
-        val directResult = runCatching { fetchReleaseFromUrl(directUrl) }
-        if (directResult.isSuccess) {
-            return directResult
+        repo: String = DEFAULT_REPO,
+        onFallbackToGithub: (() -> Unit)? = null
+    ): Result<AppRelease> {
+        val giteeUrl = "$GITEE_API_BASE/$owner/$repo/releases/latest"
+        val giteeResult = runCatching {
+            val release = fetchReleaseFromUrl(giteeUrl)
+            if (release.htmlUrl.isBlank()) {
+                release.copy(htmlUrl = "https://gitee.com/$owner/$repo/releases/tag/${release.tagName}")
+            } else {
+                release
+            }
         }
 
-        // 直连失败，降级使用镜像请求
-        val mirrorUrl = "$GITHUB_API_MIRROR/$owner/$repo/releases/latest"
-        return runCatching { fetchReleaseFromUrl(mirrorUrl) }
-            .recoverCatching { throw directResult.exceptionOrNull() ?: it }
+        if (giteeResult.isSuccess) {
+            return giteeResult
+        }
+
+        // Gitee 失败，通知降级回调
+        onFallbackToGithub?.invoke()
+
+        // Gitee 失败时平滑降级至 GitHub 官方源
+        val githubUrl = "$GITHUB_API_BASE/$owner/$repo/releases/latest"
+        return runCatching { fetchReleaseFromUrl(githubUrl) }
     }
 
     // 请求指定地址的 Release 信息
-    private suspend fun fetchReleaseFromUrl(url: String): GithubRelease {
+    private suspend fun fetchReleaseFromUrl(url: String): AppRelease {
         val response = client.get(url) {
-            header("Accept", "application/vnd.github.v3+json")
+            header("Accept", "application/json")
             header("User-Agent", "cqust-schedule-app")
         }
 
         return when (response.status) {
             HttpStatusCode.OK -> {
                 val bodyText = response.bodyAsText()
-                json.decodeFromString<GithubRelease>(bodyText)
+                json.decodeFromString<AppRelease>(bodyText)
             }
             HttpStatusCode.NotFound -> throw IllegalStateException("HTTP 404 Not Found")
+            HttpStatusCode.Forbidden -> throw IllegalStateException("HTTP 403 Forbidden")
             else -> throw IllegalStateException("HTTP ${response.status.value}")
         }
     }
 
-    // 解析下载地址 (直连 GitHub 失败时依次尝试主备镜像)
-    suspend fun resolveDownloadUrl(rawUrl: String): String {
-        if (!rawUrl.contains("github.com", ignoreCase = true)) {
-            return rawUrl
-        }
-
-        // 1. 尝试直连 GitHub
-        val isDirectOk = runCatching {
-            val response = client.get(rawUrl) {
-                header("User-Agent", "cqust-schedule-app")
-            }
-            response.status.value in 200..399
-        }.getOrDefault(false)
-
-        if (isDirectOk) {
-            return rawUrl
-        }
-
-        // 2. 直连失败，依次尝试主备镜像
-        for (mirrorBase in DOWNLOAD_MIRRORS) {
-            val candidateUrl = "$mirrorBase$rawUrl"
-            val isMirrorOk = runCatching {
-                val response = client.get(candidateUrl) {
-                    header("User-Agent", "cqust-schedule-app")
-                }
-                response.status.value in 200..399
-            }.getOrDefault(false)
-
-            if (isMirrorOk) {
-                return candidateUrl
-            }
-        }
-
-        return "${DOWNLOAD_MIRRORS.first()}$rawUrl"
+    // 解析直链 APK 地址
+    fun resolveApkDownloadUrl(release: AppRelease): String {
+        return release.assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }?.browserDownloadUrl
+            ?.takeIf { it.isNotBlank() }
+            ?: release.htmlUrl
     }
 
     // 版本号比较逻辑
@@ -152,5 +134,37 @@ object UpdateCheckService {
     private fun extractVersionNumbers(raw: String): List<Int> {
         val clean = raw.trim().trimStart('v', 'V').split("-", "_", "+")[0]
         return clean.split(".").mapNotNull { it.trim().toIntOrNull() }
+    }
+
+    // 满足冷却时间条件时后台静默检查更新 (默认冷却 24 小时)
+    suspend fun silentCheckUpdateIfNeeded(
+        settingsRepository: top.msfxp.schedule.data.repository.SettingsRepository,
+        localVersionName: String,
+        cooldownHours: Long = 24L
+    ): AppRelease? {
+        val settings = settingsRepository.getAppSettingsOnce()
+        val now = System.currentTimeMillis()
+        val lastCheck = settings.lastUpdateCheckTime
+        if ((now - lastCheck) < (cooldownHours * 3600L * 1000L)) {
+            return null
+        }
+
+        settingsRepository.updateLastUpdateCheckTime(now)
+
+        val result = fetchLatestRelease()
+        val release = result.getOrNull() ?: return null
+
+        if (isNewerVersion(release.tagName, localVersionName)) {
+            val directUrl = resolveApkDownloadUrl(release)
+            settingsRepository.saveLatestReleaseInfo(
+                tag = release.tagName,
+                downloadUrl = directUrl,
+                body = release.body.orEmpty()
+            )
+            return release
+        } else {
+            settingsRepository.clearLatestReleaseInfo()
+            return null
+        }
     }
 }

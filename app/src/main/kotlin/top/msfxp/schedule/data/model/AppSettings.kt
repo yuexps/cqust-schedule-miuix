@@ -45,7 +45,13 @@ data class AppSettings(
     val customCourseColorsJson: String = "",
 
     // 测试功能开关
-    val showTestFeatures: Boolean = false
+    val showTestFeatures: Boolean = false,
+
+    // 更新结果缓存与检查时间
+    val latestVersionTag: String = "",
+    val latestVersionDownloadUrl: String = "",
+    val latestVersionBody: String = "",
+    val lastUpdateCheckTime: Long = 0L
 ) {
     companion object {
         val KEY_CURRENT_TABLE_ID = stringPreferencesKey("current_table_id")
@@ -71,6 +77,11 @@ data class AppSettings(
         val KEY_CUSTOM_COURSE_COLORS_JSON = stringPreferencesKey("custom_course_colors_json")
         val KEY_SHOW_TEST_FEATURES = booleanPreferencesKey("show_test_features")
 
+        val KEY_LATEST_VERSION_TAG = stringPreferencesKey("latest_version_tag")
+        val KEY_LATEST_VERSION_DOWNLOAD_URL = stringPreferencesKey("latest_version_download_url")
+        val KEY_LATEST_VERSION_BODY = stringPreferencesKey("latest_version_body")
+        val KEY_LAST_UPDATE_CHECK_TIME = longPreferencesKey("last_update_check_time")
+
         // 从 DataStore 首选项解析配置对象
         fun fromPreferences(prefs: Preferences): AppSettings {
             return AppSettings(
@@ -93,7 +104,11 @@ data class AppSettings(
                 wallpaperMaskDim = prefs[KEY_WALLPAPER_MASK_DIM] ?: 0.15f,
                 courseCardAlpha = prefs[KEY_COURSE_CARD_ALPHA] ?: 0.95f,
                 customCourseColorsJson = prefs[KEY_CUSTOM_COURSE_COLORS_JSON] ?: "",
-                showTestFeatures = prefs[KEY_SHOW_TEST_FEATURES] ?: false
+                showTestFeatures = prefs[KEY_SHOW_TEST_FEATURES] ?: false,
+                latestVersionTag = prefs[KEY_LATEST_VERSION_TAG] ?: "",
+                latestVersionDownloadUrl = prefs[KEY_LATEST_VERSION_DOWNLOAD_URL] ?: "",
+                latestVersionBody = prefs[KEY_LATEST_VERSION_BODY] ?: "",
+                lastUpdateCheckTime = prefs[KEY_LAST_UPDATE_CHECK_TIME] ?: 0L
             )
         }
     }
