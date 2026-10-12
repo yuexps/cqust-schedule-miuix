@@ -176,46 +176,49 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sync and Publish to Gitee Release
+      - name: Publish to Gitee Release
         if: env.FINAL_APK_PATH != ''
         env:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
         run: |
           if [ -z "$GITEE_TOKEN" ]; then
-            echo "GITEE_TOKEN not set, skipping Gitee release sync."
+            echo "GITEE_TOKEN not set, skipping Gitee release publish."
             exit 0
           fi
 
-          echo "Pushing code and tag to Gitee..."
-          git remote add gitee "https://yuexps:${GITEE_TOKEN}@gitee.com/yuexps/cqust-schedule-miuix.git" || true
-          git push --force gitee HEAD:main
-          git push --force gitee "${TAG_NAME}"
-
-          echo "Creating Gitee Release for ${TAG_NAME}..."
+          echo "Checking existing Gitee Release for ${TAG_NAME}..."
           EXISTING_RELEASE=$(curl -s "https://gitee.com/api/v5/repos/yuexps/cqust-schedule-miuix/releases/tags/${TAG_NAME}?access_token=${GITEE_TOKEN}")
-          RELEASE_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty')
+          EXISTING_ID=$(echo "$EXISTING_RELEASE" | jq -r '.id // empty' 2>/dev/null || true)
 
-          if [ -z "$RELEASE_ID" ]; then
-            CREATE_PAYLOAD=$(jq -n \
-              --arg access_token "$GITEE_TOKEN" \
-              --arg tag_name "$TAG_NAME" \
-              --arg name "$RELEASE_TITLE" \
-              --arg body "$RELEASE_NOTES" \
-              '{access_token: $access_token, tag_name: $tag_name, name: $name, body: $body, prerelease: false}')
-
-            CREATE_RESP=$(curl -s -X POST "https://gitee.com/api/v5/repos/yuexps/cqust-schedule-miuix/releases" \
-              -H "Content-Type: application/json" \
-              -d "$CREATE_PAYLOAD")
-
-            RELEASE_ID=$(echo "$CREATE_RESP" | jq -r '.id // empty')
+          # 若已存在同名 Release，则先删除旧版本
+          if [ -n "$EXISTING_ID" ]; then
+            echo "Found existing Gitee Release (ID: $EXISTING_ID), deleting it to overwrite..."
+            curl -s -X DELETE "https://gitee.com/api/v5/repos/yuexps/cqust-schedule-miuix/releases/${EXISTING_ID}?access_token=${GITEE_TOKEN}"
+            sleep 1
           fi
 
+          echo "Creating new Gitee Release for ${TAG_NAME}..."
+          CREATE_PAYLOAD=$(jq -n \
+            --arg access_token "$GITEE_TOKEN" \
+            --arg tag_name "$TAG_NAME" \
+            --arg name "$RELEASE_TITLE" \
+            --arg body "$RELEASE_NOTES" \
+            --arg target_commitish "${{ github.ref_name }}" \
+            '{access_token: $access_token, tag_name: $tag_name, name: $name, body: $body, prerelease: false, target_commitish: $target_commitish}')
+
+          CREATE_RESP=$(curl -s -X POST "https://gitee.com/api/v5/repos/yuexps/cqust-schedule-miuix/releases" \
+            -H "Content-Type: application/json" \
+            -d "$CREATE_PAYLOAD")
+
+          RELEASE_ID=$(echo "$CREATE_RESP" | jq -r '.id // empty' 2>/dev/null || true)
+
           if [ -n "$RELEASE_ID" ]; then
-            echo "Uploading APK attachment to Gitee Release $RELEASE_ID..."
+            echo "Uploading APK attachment to Gitee Release (ID: $RELEASE_ID)..."
             UPLOAD_RESP=$(curl -s -X POST "https://gitee.com/api/v5/repos/yuexps/cqust-schedule-miuix/releases/${RELEASE_ID}/attach_files" \
               -F "access_token=${GITEE_TOKEN}" \
               -F "file=@${FINAL_APK_PATH}")
-            echo "Gitee Release upload completed."
+            echo "Gitee Release upload completed. Response: $UPLOAD_RESP"
           else
-            echo "Failed to create or find Gitee release: $CREATE_RESP"
+            echo "Error: Failed to create Gitee release: $CREATE_RESP"
+            exit 1
           fi
