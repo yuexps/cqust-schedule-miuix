@@ -232,6 +232,13 @@
     <string name="widget_kaomoji_happy">( // \' ▽ \' // )</string>
     <string name="widget_no_courses_today">今天没有课啦</string>
     <string name="widget_date_format">%1$d.%2$d</string>
+    <string name="widget_preview_date">10.15</string>
+    <string name="widget_preview_weekday">周三</string>
+    <string name="widget_preview_course1_name">高等数学</string>
+    <string name="widget_preview_course1_room">笃行楼 201 张老师</string>
+    <string name="widget_preview_course1_time">08:00 - 09:40</string>
+    <string name="widget_preview_course2_name">大学物理</string>
+    <string name="widget_preview_course2_time_room">10:00 慎思楼 305</string>
 
     <!-- 通知 -->
     <string name="item_course_reminder">上课前提醒</string>

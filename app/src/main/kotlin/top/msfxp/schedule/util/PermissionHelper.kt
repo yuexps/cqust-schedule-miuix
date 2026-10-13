@@ -99,19 +99,34 @@ object PermissionHelper {
     fun openAutoStartSettings(context: Context) {
         val brand = Build.MANUFACTURER.lowercase()
         val intents = when {
-            brand.contains("xiaomi") || brand.contains("redmi") -> listOf(
+            brand.contains("xiaomi") || brand.contains("redmi") || brand.contains("poco") -> listOf(
                 Intent("miui.intent.action.OP_AUTO_START").addCategory(Intent.CATEGORY_DEFAULT),
                 Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"))
             )
-            brand.contains("huawei") || brand.contains("honor") -> listOf(
+            brand.contains("huawei") -> listOf(
                 Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")),
-                Intent().setComponent(ComponentName("com.hihonor.systemmanager", "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity"))
+                Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.appcontrol.activity.StartupAppControlActivity"))
+            )
+            brand.contains("honor") -> listOf(
+                Intent().setComponent(ComponentName("com.hihonor.systemmanager", "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity")),
+                Intent().setComponent(ComponentName("com.hihonor.systemmanager", "com.hihonor.systemmanager.appcontrol.activity.StartupAppControlActivity")),
+                Intent().setComponent(ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"))
             )
             brand.contains("oppo") || brand.contains("oneplus") || brand.contains("realme") -> listOf(
-                Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"))
+                Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity")),
+                Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
+                Intent().setComponent(ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startupapp.StartupAppListActivity")),
+                Intent().setComponent(ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"))
             )
             brand.contains("vivo") || brand.contains("iqoo") -> listOf(
-                Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"))
+                Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.PurviewTabActivity")),
+                Intent().setComponent(ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+                Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.BgStartUpManager")),
+                Intent().setComponent(ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity"))
+            )
+            brand.contains("meizu") -> listOf(
+                Intent().setComponent(ComponentName("com.meizu.safe", "com.meizu.safe.permission.SmartBGActivity")),
+                Intent().setComponent(ComponentName("com.meizu.safe", "com.meizu.safe.permission.PermissionMainActivity"))
             )
             else -> emptyList()
         }
@@ -130,30 +145,22 @@ object PermissionHelper {
 
     // 打开后台运行与电池优化设置
     fun openBatteryOptimizationSettings(context: Context) {
-        if (!isBatteryOptimizationsIgnored(context)) {
-            try {
-                val requestDialogIntent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                    data = Uri.fromParts("package", context.packageName, null)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(requestDialogIntent)
-                return
-            } catch (e: Exception) {
-                Log.w(TAG, "Request ignore battery optimizations dialog failed: ${e.message}")
-            }
-        }
-
         try {
-            val listIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.fromParts("package", context.packageName, null)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(listIntent)
-            return
-        } catch (e: Exception) {
-            Log.w(TAG, "Open ignore battery optimization list failed: ${e.message}")
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                val listIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(listIntent)
+            } catch (_: Exception) {
+                openAppDetailsSettings(context)
+            }
         }
-
-        openAppDetailsSettings(context)
     }
 
     // 打开应用详情设置

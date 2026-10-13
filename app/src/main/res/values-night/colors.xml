@@ -5,4 +5,6 @@
     <color name="widget_text_primary">#F3F4F6</color>
     <color name="widget_text_secondary">#9CA3AF</color>
     <color name="widget_text_tertiary">#6B7280</color>
+    <color name="widget_preview_indicator_1">#0D84FF</color>
+    <color name="widget_preview_indicator_2">#34C759</color>
 </resources>
