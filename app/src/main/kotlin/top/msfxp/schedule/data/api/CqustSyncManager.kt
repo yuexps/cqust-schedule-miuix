@@ -41,14 +41,14 @@ class CqustSyncManager(
         if (pwd.isEmpty()) return@withContext Result.failure(IllegalArgumentException("密码不能为空"))
 
         // 1. 建立教务传输会话
-        val connectResult = CqustEamsClient.connect(sid, pwd, onProgress)
+        val connectResult = CqustCasAuthClient.connect(sid, pwd, onProgress)
         if (connectResult.isFailure) {
             return@withContext Result.failure(connectResult.exceptionOrNull() ?: Exception("教务网络连接失败"))
         }
         val session = connectResult.getOrThrow()
 
         // 2. 抓取课表数据
-        onProgress?.invoke("正在同步课表数据...")
+        onProgress?.invoke("正在同步课表数据")
         val (eamsResult, practicalItems) = fetchScheduleData(session, sid, targetSemesterId, onProgress)
 
         if (!eamsResult.success) {
@@ -82,7 +82,7 @@ class CqustSyncManager(
 
     // 并发协同抓取教务常规课表与实践教学课表
     private suspend fun fetchScheduleData(
-        session: ConnectedEamsSession,
+        session: CqustWebVpnSession,
         studentId: String,
         targetSemesterId: String?,
         onProgress: ((String) -> Unit)?
@@ -90,16 +90,16 @@ class CqustSyncManager(
         val (eamsResult, practicalResult) = coroutineScope {
             val eamsDeferred = async {
                 CqustEamsParser.fetchAndParse(
-                    transport = session.transport,
+                    session = session,
                     studentId = studentId,
                     targetSemesterId = targetSemesterId,
                     onProgress = onProgress
                 )
             }
-            val practicalDeferred = if (session.vpnSession != null && targetSemesterId == null) {
+            val practicalDeferred = if (targetSemesterId == null) {
                 async {
                     CqustPracticalParser.fetchAndParse(
-                        session = session.vpnSession,
+                        session = session,
                         studentId = studentId,
                         targetYearTerm = null
                     )
@@ -110,18 +110,17 @@ class CqustSyncManager(
         }
 
         var practicalItems = emptyList<RawPracticalItem>()
-        val vpnSession = session.vpnSession
         if (practicalResult != null && practicalResult.success) {
             practicalItems = practicalResult.items
-        } else if (vpnSession != null && targetSemesterId != null) {
+        } else if (targetSemesterId != null) {
             val semesterId = eamsResult.semesterId ?: eamsResult.semesters.firstOrNull()?.id.orEmpty()
             val semInfo = eamsResult.semesters.find { it.id == semesterId } ?: eamsResult.semesters.firstOrNull()
             val practicalTerm = if (semInfo != null) "${semInfo.schoolYear}-${semInfo.name}" else null
 
-            onProgress?.invoke("正在获取指定学期实践课表...")
-            val fallbackResult = CqustPracticalParser.fetchAndParse(vpnSession, studentId, practicalTerm)
-            if (fallbackResult.success && fallbackResult.items.isNotEmpty()) {
-                practicalItems = fallbackResult.items
+            onProgress?.invoke("正在获取学期实践课表")
+            val termResult = CqustPracticalParser.fetchAndParse(session, studentId, practicalTerm)
+            if (termResult.success && termResult.items.isNotEmpty()) {
+                practicalItems = termResult.items
             }
         }
 

@@ -29,11 +29,9 @@
 ---
 
 ### 2.2 教务网络传输与同步层 (`data/api`)
-- [CqustCasAuthClient.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustCasAuthClient.kt)：统一身份认证（CAS）登录流程、execution/lt 提取与验证码识别。
+- [CqustCasAuthClient.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustCasAuthClient.kt)：统一身份认证（CAS）登录与教务系统 WebVPN 单点登录会话接入。
 - [CqustWebVpnSession.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustWebVpnSession.kt)：校园外网 WebVPN 隧道握手、会话保活与双重重定向维持。
-- [CqustVpnCrypto.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustVpnCrypto.kt)：WebVPN 专用 AES-CFB-128 URL/Path 编解码转换算法。
-- [EamsTransport.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/EamsTransport.kt)：教务双轨网络传输接口及实现（校园内网直连 / 校外 WebVPN 代理）。
-- [CqustEamsClient.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustEamsClient.kt)：教务系统客户端，获取学期列表及拉取课表原始 HTML。
+- [CqustVpnCrypto.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustVpnCrypto.kt)：WebVPN 专用 AES-CFB-128 URL/Path 编解码转换算法与密码加密。
 - [CqustEamsParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustEamsParser.kt)：常规理论课表与未排课 HTML 解析器（提取课程、节次、教师与教室）。
 - [CqustPracticalParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustPracticalParser.kt)：实验/集中实践教学环节课表 HTML 解析器。
 - [ScheduleMatrixBuilder.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/ScheduleMatrixBuilder.kt)：时空原子矩阵构建器，处理单双周展开、时间冲突聚合与地点纠偏。
@@ -113,7 +111,7 @@
 ## 3. 核心业务数据流向
 
 1. **教务课表同步链路**：
-   `CqustLoginScreen` -> `CqustSyncManager` -> `CqustCasAuthClient` / `CqustWebVpnSession` -> `CqustEamsClient` -> `CqustEamsParser` / `CqustPracticalParser` -> `ScheduleMatrixBuilder` -> `ScheduleDao` (写入数据库) -> `CalendarSyncHelper` (同步系统日历)。
+   `CqustLoginScreen` -> `CqustSyncManager` -> `CqustCasAuthClient` -> `CqustWebVpnSession` -> `CqustEamsParser` / `CqustPracticalParser` -> `ScheduleMatrixBuilder` -> `ScheduleDao` (写入数据库) -> `CalendarSyncHelper` (同步系统日历)。
 2. **课表呈现与动态调课链路**：
    `ScheduleDao` -> `ScheduleRepository` -> `WeeklyScheduleViewModel` -> `WeeklyScheduleScreen` -> `ScheduleGrid` -> `CourseEditSheet` -> `CourseAdjustmentSubSheet` -> `ScheduleRepository` (更新并局部重组)。
 3. **后台课前提醒与课堂免打扰链路**：

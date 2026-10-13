@@ -17,6 +17,42 @@ data class CasAuthResult(
 // 统一身份认证客户端
 object CqustCasAuthClient {
     private const val GATEWAY = "https://web.cqust.edu.cn"
+    private const val JWNEW_HOST = "jwnew.cqust.edu.cn"
+
+    // 建立教务会话（通过统一身份认证与 WebVPN 单点登录）
+    suspend fun connect(
+        studentId: String,
+        passwordRaw: String,
+        onProgress: ((String) -> Unit)? = null
+    ): Result<CqustWebVpnSession> {
+        // 1. 统一身份认证登录
+        onProgress?.invoke("正在登录统一身份认证")
+        val casResult = login(studentId, passwordRaw)
+        if (!casResult.success || casResult.session == null) {
+            val errMsg = casResult.errorMessage ?: "认证失败，请检查账号密码或网络连接"
+            return Result.failure(Exception(errMsg))
+        }
+
+        // 2. 接入教务系统
+        onProgress?.invoke("正在接入教务系统")
+        val session = casResult.session
+        val vpnEamsBase = CqustVpnCrypto.buildVpnUrl("http", JWNEW_HOST, "/eams")
+        val unifiedLoginUrl = "$vpnEamsBase/unifiedLogin.action"
+
+        return try {
+            val (homeUrl, ssoResp) = session.getFollowingRedirects(unifiedLoginUrl)
+            val hasEnteredEams = homeUrl.contains("eams") &&
+                    ssoResp.status.value in 200..399 &&
+                    !homeUrl.contains("/login")
+            if (hasEnteredEams) {
+                Result.success(session)
+            } else {
+                Result.failure(Exception("教务系统单点登录失败，请稍后重试"))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("接入教务系统网络异常: ${e.message}", e))
+        }
+    }
 
     // 执行统一身份认证登录流程
     suspend fun login(

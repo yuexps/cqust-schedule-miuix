@@ -46,22 +46,23 @@ private data class CourseTableEntryInfo(
 
 // 单源教务系统解析器
 object CqustEamsParser {
+    private const val JWNEW_HOST = "jwnew.cqust.edu.cn"
 
     // 抓取并解析教务系统课表数据
     suspend fun fetchAndParse(
-        transport: EamsTransport,
+        session: CqustWebVpnSession,
         studentId: String,
         targetSemesterId: String? = null,
         onProgress: ((String) -> Unit)? = null
     ): EamsFetchResult {
         return try {
-            val baseUrl = transport.baseUrl
+            val baseUrl = CqustVpnCrypto.buildVpnUrl("http", JWNEW_HOST, "/eams")
 
-            // 1. 并发获取学生档案与课表入口信息（合并消除重复网络请求）
-            onProgress?.invoke("正在获取学生档案与学期日历...")
+            // 1. 并发获取学生档案与课表入口信息
+            onProgress?.invoke("正在获取学生档案与学期日历")
             val (profile, entryInfo) = coroutineScope {
-                val profileDeferred = async { fetchStudentProfile(transport, baseUrl, studentId) }
-                val entryDeferred = async { fetchCourseTableEntry(transport, baseUrl) }
+                val profileDeferred = async { fetchStudentProfile(session, baseUrl, studentId) }
+                val entryDeferred = async { fetchCourseTableEntry(session, baseUrl) }
                 profileDeferred.await() to entryDeferred.await()
             }
 
@@ -74,7 +75,7 @@ object CqustEamsParser {
 
             // 2. 查询学期日历
             val (dynamicSemId, semesterList) = fetchSemesterCalendar(
-                transport = transport,
+                session = session,
                 baseUrl = baseUrl,
                 tagId = entryInfo.tagId,
                 targetSemesterId = targetSemesterId.orEmpty(),
@@ -84,18 +85,18 @@ object CqustEamsParser {
                 ?: dynamicSemId.ifBlank { semesterList.find { it.isCurrent }?.id ?: semesterList.firstOrNull()?.id.orEmpty() }
 
             // 3. 并发下载课表正文与培养计划
-            onProgress?.invoke("正在下载并解析课表正文...")
+            onProgress?.invoke("正在获取并解析课表正文")
             val (tableHtml, planMap) = coroutineScope {
                 val tableDeferred = async {
                     val tableBody = "ignoreHead=1&setting.kind=std&startWeek=1&project.id=1&semester.id=$detectedSemesterId&ids=${entryInfo.scheduleIds}"
-                    transport.post(
+                    session.post(
                         url = "$baseUrl/courseTableForStd!courseTable.action",
                         body = tableBody,
                         referer = "$baseUrl/courseTableForStd.action"
                     ).bodyAsText()
                 }
                 val planDeferred = async {
-                    fetchTeachingPlan(transport, baseUrl, detectedSemesterId)
+                    fetchTeachingPlan(session, baseUrl, detectedSemesterId)
                 }
                 tableDeferred.await() to planDeferred.await()
             }
@@ -152,12 +153,12 @@ object CqustEamsParser {
 
     // 提取学生个人信息
     private suspend fun fetchStudentProfile(
-        transport: EamsTransport,
+        session: CqustWebVpnSession,
         baseUrl: String,
         studentId: String
     ): StudentProfile {
         return try {
-            val resp = transport.get("$baseUrl/stdDetail.action")
+            val resp = session.get("$baseUrl/stdDetail.action")
             val html = resp.bodyAsText()
             fun extractField(fieldName: String): String {
                 val regex = Regex("""$fieldName\s*：\s*</td>\s*<td[^>]*>\s*([^<]+)""")
@@ -177,11 +178,11 @@ object CqustEamsParser {
 
     // 一次性提取课表入口配置与排课标识
     private suspend fun fetchCourseTableEntry(
-        transport: EamsTransport,
+        session: CqustWebVpnSession,
         baseUrl: String
     ): CourseTableEntryInfo {
         return try {
-            val pageResp = transport.get("$baseUrl/courseTableForStd.action")
+            val pageResp = session.get("$baseUrl/courseTableForStd.action")
             val pageHtml = pageResp.bodyAsText()
 
             val tagIdMatch = Regex("""id=["'](semesterBar\d+Semester)["']""").find(pageHtml)
@@ -213,7 +214,7 @@ object CqustEamsParser {
 
     // 提取学期日历
     private suspend fun fetchSemesterCalendar(
-        transport: EamsTransport,
+        session: CqustWebVpnSession,
         baseUrl: String,
         tagId: String,
         targetSemesterId: String,
@@ -223,7 +224,7 @@ object CqustEamsParser {
             val queryVal = targetSemesterId.ifBlank { defaultSemesterId }
             val postBody = "tagId=$tagId&dataType=semesterCalendar&value=$queryVal&empty=false"
 
-            val resp = transport.post(
+            val resp = session.post(
                 url = "$baseUrl/dataQuery.action",
                 body = postBody,
                 referer = "$baseUrl/courseTableForStd.action",
@@ -275,14 +276,14 @@ object CqustEamsParser {
 
     // 提取培养计划
     private suspend fun fetchTeachingPlan(
-        transport: EamsTransport,
+        session: CqustWebVpnSession,
         baseUrl: String,
         semesterId: String
     ): Map<String, TeachingPlanInfo> {
         val map = mutableMapOf<String, TeachingPlanInfo>()
         return try {
             val body = "setting.forSemester=1&semester.id=$semesterId"
-            val resp = transport.post("$baseUrl/teachingPlanSearchForStu!courseTable.action", body = body)
+            val resp = session.post("$baseUrl/teachingPlanSearchForStu!courseTable.action", body = body)
             val html = resp.bodyAsText()
             val trRegex = Regex("""<tr[^>]*>([\s\S]*?)</tr>""", RegexOption.IGNORE_CASE)
             val tdRegex = Regex("""<td[^>]*>([\s\S]*?)</td>""", RegexOption.IGNORE_CASE)
