@@ -56,7 +56,7 @@ object CqustEamsParser {
         onProgress: ((String) -> Unit)? = null
     ): EamsFetchResult {
         return try {
-            val baseUrl = CqustVpnCrypto.buildVpnUrl("http", JWNEW_HOST, "/eams")
+            val baseUrl = session.eamsBaseUrl ?: CqustVpnCrypto.buildVpnUrl("http", JWNEW_HOST, "/eams")
 
             // 1. 并发获取学生档案与课表入口信息
             onProgress?.invoke("正在获取学生档案与学期日历")
@@ -158,7 +158,7 @@ object CqustEamsParser {
         studentId: String
     ): StudentProfile {
         return try {
-            val resp = session.get("$baseUrl/stdDetail.action")
+            val (_, resp) = session.getFollowingRedirects("$baseUrl/stdDetail.action")
             val html = resp.bodyAsText()
             fun extractField(fieldName: String): String {
                 val regex = Regex("""$fieldName\s*：\s*</td>\s*<td[^>]*>\s*([^<]+)""")
@@ -182,7 +182,7 @@ object CqustEamsParser {
         baseUrl: String
     ): CourseTableEntryInfo {
         return try {
-            val pageResp = session.get("$baseUrl/courseTableForStd.action")
+            val (_, pageResp) = session.getFollowingRedirects("$baseUrl/courseTableForStd.action")
             val pageHtml = pageResp.bodyAsText()
 
             val tagIdMatch = Regex("""id=["'](semesterBar\d+Semester)["']""").find(pageHtml)

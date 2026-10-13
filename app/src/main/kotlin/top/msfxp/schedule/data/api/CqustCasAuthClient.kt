@@ -45,6 +45,12 @@ object CqustCasAuthClient {
                     ssoResp.status.value in 200..399 &&
                     !homeUrl.contains("/login")
             if (hasEnteredEams) {
+                // 提取教务基地址
+                session.eamsBaseUrl = if (homeUrl.contains("/eams")) {
+                    homeUrl.substring(0, homeUrl.indexOf("/eams") + 5)
+                } else {
+                    vpnEamsBase
+                }
                 Result.success(session)
             } else {
                 Result.failure(Exception("教务系统单点登录失败，请稍后重试"))

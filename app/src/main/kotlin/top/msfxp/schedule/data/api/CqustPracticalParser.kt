@@ -53,35 +53,48 @@ object CqustPracticalParser {
         targetYearTerm: String? = null
     ): PracticalFetchResult {
         return try {
-            val sjjxBase = CqustVpnCrypto.buildVpnUrl("http", SJJX_HOST, "")
+            val sjjxVpnBase = CqustVpnCrypto.buildVpnUrl("http", SJJX_HOST, "")
 
             // 1. 单点登录与三级 JS 跳转跟随
-            val ssoEntryUrl = "$sjjxBase/cqust_sso"
-            val (_, ssoResp) = session.getFollowingRedirects(ssoEntryUrl)
+            val ssoEntryUrl = "$sjjxVpnBase/cqust_sso"
+            val (actualSsoUrl, ssoResp) = session.getFollowingRedirects(ssoEntryUrl)
             if (ssoResp.status != HttpStatusCode.OK) {
                 return PracticalFetchResult(success = false, errorMessage = "实践教学单点登录失败(HTTP ${ssoResp.status.value})")
             }
+
+            // 解析实践系统基地址
+            val actualBase = if (actualSsoUrl.contains("web.cqust.edu.cn")) {
+                sjjxVpnBase
+            } else {
+                try {
+                    val uri = java.net.URI(actualSsoUrl)
+                    "${uri.scheme}://${uri.authority}"
+                } catch (_: Exception) {
+                    sjjxVpnBase
+                }
+            }
+            session.sjjxBaseUrl = actualBase
 
             val ssoHtml = ssoResp.bodyAsText()
             val jsLocationMatch = Regex("""(?:self|window)\.location\s*=\s*['"]([^'"]+)['"]""").find(ssoHtml)
                 ?: return PracticalFetchResult(success = false, errorMessage = "未能提取实践系统跳转票据")
 
             val step2Path = jsLocationMatch.groupValues[1]
-            val step2Url = session.resolveUrl(ssoEntryUrl, step2Path)
-            val step2Resp = session.get(step2Url, referer = ssoEntryUrl)
+            val step2Url = session.resolveUrl(actualSsoUrl, step2Path)
+            val (step2ActualUrl, step2Resp) = session.getFollowingRedirects(step2Url, referer = actualSsoUrl)
 
             val step2Html = step2Resp.bodyAsText()
             val step3Match = Regex("""(?:self|window)\.location\s*=\s*['"]([^'"]+)['"]""").find(step2Html)
             val finalLoginUrl = if (step3Match != null && !step3Match.groupValues[1].contains("skin=")) {
-                session.resolveUrl(step2Url, step3Match.groupValues[1])
+                session.resolveUrl(step2ActualUrl, step3Match.groupValues[1])
             } else {
-                "$sjjxBase/StuExpbook/login.jsp"
+                "$actualBase/StuExpbook/login.jsp"
             }
-            session.get(finalLoginUrl, referer = step2Url)
+            session.getFollowingRedirects(finalLoginUrl, referer = step2ActualUrl)
 
             // 2. 访问课表页面提取当前选中学年学期与学期列表
-            val bookResultUrl = "$sjjxBase/StuExpbook/teach/bookResult.jsp"
-            val initResp = session.get(bookResultUrl, referer = finalLoginUrl)
+            val bookResultUrl = "$actualBase/StuExpbook/teach/bookResult.jsp"
+            val (_, initResp) = session.getFollowingRedirects(bookResultUrl, referer = finalLoginUrl)
             val initHtml = initResp.bodyAsText()
 
             val (detectedCurrentTerm, _) = extractSemesters(initHtml)

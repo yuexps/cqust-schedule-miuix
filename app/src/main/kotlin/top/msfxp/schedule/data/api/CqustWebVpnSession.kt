@@ -31,6 +31,10 @@ class CqustWebVpnSession(
 
     private val cookieMap = java.util.concurrent.ConcurrentHashMap<String, String>()
 
+    // 教务与实践系统基地址
+    var eamsBaseUrl: String? = null
+    var sjjxBaseUrl: String? = null
+
     // 检查是否已持有有效的 WebVPN 会话 Ticket
     fun hasVpnTicket(): Boolean = cookieMap.containsKey(VPN_TICKET_COOKIE)
 
@@ -73,9 +77,16 @@ class CqustWebVpnSession(
             if (location.startsWith("http://") || location.startsWith("https://")) {
                 location
             } else if (location.startsWith("/")) {
-                "$VPN_GATEWAY$location"
+                val origin = try {
+                    val uri = URI(currentUrl)
+                    "${uri.scheme}://${uri.authority}"
+                } catch (_: Exception) {
+                    VPN_GATEWAY
+                }
+                "$origin$location"
             } else {
-                "$VPN_GATEWAY/$location"
+                val prefix = currentUrl.substringBeforeLast('/')
+                "$prefix/$location"
             }
         }
     }
