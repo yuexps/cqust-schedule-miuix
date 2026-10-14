@@ -20,28 +20,29 @@ enum class MapAppType(
 object MapNavigationHelper {
 
     private const val SCHOOL_NAME = "重庆科技大学"
-    private const val CAMPUS_NAME = "虎溪校区"
+    private const val CAMPUS_HUXI = "虎溪校区"
+    private const val CAMPUS_JINFENG = "金凤校区"
 
     // 智能提取楼栋并构造标准目的地搜索词
-    fun buildWalkingDestination(rawPosition: String): String {
-        val trimmed = rawPosition.trim()
-        if (trimmed.isBlank() || trimmed == "待定") {
-            return "$SCHOOL_NAME $CAMPUS_NAME"
+    fun buildWalkingDestination(position: String): String {
+        val trimmed = position.trim()
+        if (trimmed.isBlank() || trimmed == "待定" || trimmed.contains("未安排")) {
+            return "$SCHOOL_NAME $CAMPUS_HUXI"
         }
         if (trimmed.contains(SCHOOL_NAME)) {
             return trimmed
         }
 
-        // 提取主要建筑名称，剥离房间号
-        val buildingPart = trimmed.split(Regex("\\s+")).firstOrNull() ?: trimmed
-        val cleanBuilding = buildingPart.replace(Regex("(?i)[a-z]?\\d{2,}.*$"), "").trim()
-        val targetBuilding = if (cleanBuilding.isNotBlank()) cleanBuilding else buildingPart
+        // 仅在明确标明“金凤”时定向金凤校区，其余默认虎溪校区
+        val campusName = if (trimmed.contains("金凤")) CAMPUS_JINFENG else CAMPUS_HUXI
 
-        return if (trimmed.contains(CAMPUS_NAME)) {
-            "$SCHOOL_NAME $targetBuilding"
-        } else {
-            "$SCHOOL_NAME $CAMPUS_NAME $targetBuilding"
-        }
+        // 剥离校区前缀与房间号，提取纯建筑名称
+        val withoutCampus = trimmed.replace(campusName, "").trim()
+        val buildingPart = withoutCampus.split(Regex("\\s+")).firstOrNull().orEmpty()
+        val cleanBuilding = buildingPart.replace(Regex("(?i)[a-z]?\\d{2,}.*$"), "").trim()
+        val targetBuilding = cleanBuilding.ifBlank { buildingPart.ifBlank { withoutCampus } }
+
+        return "$SCHOOL_NAME $campusName $targetBuilding".trim()
     }
 
     // 检查是否安装指定包名的应用

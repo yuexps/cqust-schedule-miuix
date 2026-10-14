@@ -9,6 +9,7 @@ import java.net.URLEncoder
 
 // 原始实践实验排课条目模型
 data class RawPracticalItem(
+    val courseCode: String = "",
     val name: String,
     val projectName: String,
     val day: Int,
@@ -98,6 +99,7 @@ object CqustPracticalParser {
             val initHtml = initResp.bodyAsText()
 
             val (detectedCurrentTerm, _) = extractSemesters(initHtml)
+            val courseCodeMap = extractCourseCodeMap(initHtml)
             val activeYearTerm = targetYearTerm?.ifBlank { null } ?: detectedCurrentTerm.orEmpty()
             if (activeYearTerm.isBlank()) {
                 return PracticalFetchResult(success = false, errorMessage = "未能提取到实践教学有效学期")
@@ -139,7 +141,8 @@ object CqustPracticalParser {
             }
 
             // 5. 解析实践数据行
-            val items = parseRowsToItems(rawRows)
+            val finalCodeMap = courseCodeMap.ifEmpty { extractCourseCodeMap(firstPageHtml) }
+            val items = parseRowsToItems(rawRows, finalCodeMap)
             PracticalFetchResult(
                 success = true,
                 yearTerm = activeYearTerm,
@@ -195,6 +198,35 @@ object CqustPracticalParser {
         return Pair(currentTerm, list)
     }
 
+    // 从页面提取课程代码与课程名称的映射字典
+    fun extractCourseCodeMap(html: String): Map<String, String> {
+        val selectMatch = Regex("""<select[^>]*name=["']?currTeachCourseCode["']?[^>]*>([\s\S]*?)</select>""", RegexOption.IGNORE_CASE).find(html)
+            ?: return emptyMap()
+        val selectContent = selectMatch.groupValues[1]
+        val optionRegex = Regex("""<option\s+[^>]*value=["']?([^"'\s>]+)["']?[^>]*>([^<]*)</option>""", RegexOption.IGNORE_CASE)
+
+        val map = mutableMapOf<String, String>()
+        for (m in optionRegex.findAll(selectContent)) {
+            val code = m.groupValues[1].trim()
+            val text = m.groupValues[2].trim()
+            if (code.isBlank() || code == "%") continue
+
+            val courseName = if (text.contains("-")) {
+                text.substringAfter("-").trim()
+            } else {
+                text
+            }
+            if (courseName.isNotBlank()) {
+                map[courseName] = code
+                val stripped = courseName.replace(Regex("""^[（(].*?[）)]"""), "").trim()
+                if (stripped.isNotBlank() && stripped != courseName) {
+                    map.putIfAbsent(stripped, code)
+                }
+            }
+        }
+        return map
+    }
+
     // 提取分页栏总条数与单页数量
     private fun extractPageInfo(html: String): Pair<Int, Int> {
         val match = Regex("""createPageBar\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)""").find(html)
@@ -228,7 +260,10 @@ object CqustPracticalParser {
     }
 
     // 将解析出的表格行转换为原始排课模型
-    private fun parseRowsToItems(rows: List<List<String>>): List<RawPracticalItem> {
+    private fun parseRowsToItems(
+        rows: List<List<String>>,
+        courseCodeMap: Map<String, String> = emptyMap()
+    ): List<RawPracticalItem> {
         val list = mutableListOf<RawPracticalItem>()
         for (r in rows) {
             val courseName = r[0]
@@ -239,8 +274,13 @@ object CqustPracticalParser {
             val selectedCount = r.getOrNull(9)?.toIntOrNull() ?: 0
 
             val parsedTime = parseTimeText(timeText) ?: continue
+            val code = courseCodeMap[courseName]
+                ?: courseCodeMap[courseName.replace(Regex("""^[（(].*?[）)]"""), "").trim()]
+                ?: ""
+
             list.add(
                 RawPracticalItem(
+                    courseCode = code,
                     name = courseName,
                     projectName = projectName,
                     day = parsedTime.day,
