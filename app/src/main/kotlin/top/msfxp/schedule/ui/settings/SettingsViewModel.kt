@@ -287,14 +287,14 @@ class SettingsViewModel(
         }
     }
 
-    // 设置 60 秒后后台定时测试通知闹钟
-    fun scheduleDelayed60sTestNotification(context: android.content.Context) {
+    // 设置 30 秒后后台定时测试通知闹钟
+    fun scheduleDelayed30sTestNotification(context: android.content.Context) {
         viewModelScope.launch {
             val (name, position, teacher) = getTestCoursePayload(context)
             val testTitle = context.getString(top.msfxp.schedule.R.string.test_notification_wakeup_title, name)
 
             val alarmManager = context.getSystemService(android.app.AlarmManager::class.java) ?: return@launch
-            val triggerMillis = System.currentTimeMillis() + 60_000L
+            val triggerMillis = System.currentTimeMillis() + 30_000L
 
             val reminderIntent = android.content.Intent(context, top.msfxp.schedule.service.CourseAlarmReceiver::class.java).apply {
                 putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_COURSE_NAME, testTitle)

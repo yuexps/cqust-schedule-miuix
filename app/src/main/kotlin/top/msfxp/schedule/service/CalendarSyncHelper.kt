@@ -98,8 +98,15 @@ class CalendarSyncHelper(
 
                         val descParts = mutableListOf<String>()
                         if (ev.isAdjusted) descParts.add(context.getString(R.string.calendar_event_desc_adjusted))
-                        if (ev.teacher.isNotBlank()) descParts.add(context.getString(R.string.calendar_event_desc_teacher_format, ev.teacher))
                         val desc = descParts.joinToString("\n")
+
+                        val teacher = ev.teacher.trim()
+                        val eventLocation = ev.location.trim()
+                        val location = when {
+                            teacher.isBlank() -> eventLocation
+                            eventLocation.isBlank() -> teacher
+                            else -> context.getString(R.string.calendar_event_location_teacher_format, eventLocation, teacher)
+                        }
 
                         val cleanProject = ev.projectName.trim().replace(Regex("[^a-zA-Z0-9_\\u4e00-\\u9fa5]"), "_")
                         val baseKey = "cqust_${tableId}_w${w}_d${ev.day}_s${ev.startSection}_c${ev.courseId}_p${cleanProject}"
@@ -114,7 +121,7 @@ class CalendarSyncHelper(
                             DesiredCalendarEvent(
                                 syncKey = finalKey,
                                 title = ev.calendarTitle,
-                                location = ev.location,
+                                location = location,
                                 description = desc,
                                 startMillis = startMillis,
                                 endMillis = endMillis,
