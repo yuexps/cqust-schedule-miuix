@@ -162,15 +162,13 @@ object ScheduleMatrixBuilder {
         return Pair(courseList, eventList)
     }
 
-    // 展开单条实践项目的各周次事件并纠偏地点与晚课时段
+    // 展开单条实践项目的各周次事件并纠偏地点
     private fun expandPracticalEvents(
         courseId: String,
         tableId: String,
         item: RawPracticalItem
     ): List<CourseEvent> {
         val cleanLocation = normalizePracticalLocation(item.location)
-        val correctedStart = if (item.startSection == 10 && item.endSection == 11) 9 else item.startSection
-        val correctedEnd = if (item.startSection == 10 && item.endSection == 11) 10 else item.endSection
 
         return item.weeks.map { week ->
             CourseEvent(
@@ -178,8 +176,8 @@ object ScheduleMatrixBuilder {
                 tableId = tableId,
                 week = week,
                 day = item.day,
-                startSection = correctedStart,
-                endSection = correctedEnd,
+                startSection = item.startSection,
+                endSection = item.endSection,
                 location = cleanLocation,
                 teacher = item.teacher,
                 projectName = item.projectName,

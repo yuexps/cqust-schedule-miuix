@@ -15,8 +15,11 @@
 - **语言环境**：Kotlin (JDK 21)
 - **界面架构**：Jetpack Compose + [Miuix](https://github.com/miuix-kotlin/miuix)
 - **数据持久化**：Room + DataStore Preferences
-- **架构模式**：MVVM + Flow + Coroutines + KSP
-- **构建目标**：`arm64-v8a`
+- **网络与依赖注入**：Ktor + Koin
+- **后台任务**：WorkManager
+- **架构模式**：MVVM + Flow + Coroutines
+- **编译工具**：KSP
+- **目标架构**：`arm64-v8a`（minSdk 31）
 
 ## 免责声明
 
