@@ -1,6 +1,8 @@
 package top.msfxp.schedule.data.db
 
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import top.msfxp.schedule.data.model.*
 
@@ -204,6 +206,39 @@ interface ScheduleDao {
     suspend fun clearAllAdjustments(tableId: String)
 }
 
+// 考试记录数据访问接口
+@Dao
+interface ExamDao {
+
+    // 观察指定学期的考试记录
+    @Query("""
+        SELECT * FROM exam_records
+        WHERE tableId = :tableId AND semesterId = :semesterId
+        ORDER BY (examDate IS NULL) ASC, examDate ASC, startTime ASC, sequence ASC
+    """)
+    fun observeBySemester(tableId: String, semesterId: String): Flow<List<ExamRecord>>
+
+    @Query("""
+        SELECT * FROM exam_records
+        WHERE tableId = :tableId AND semesterId = :semesterId
+        ORDER BY (examDate IS NULL) ASC, examDate ASC, startTime ASC, sequence ASC
+    """)
+    suspend fun getBySemester(tableId: String, semesterId: String): List<ExamRecord>
+
+    @Query("DELETE FROM exam_records WHERE tableId = :tableId AND semesterId = :semesterId")
+    suspend fun clearBySemester(tableId: String, semesterId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(records: List<ExamRecord>)
+
+    // 按学期整批替换考试记录
+    @Transaction
+    suspend fun replaceSemesterExams(tableId: String, semesterId: String, records: List<ExamRecord>) {
+        clearBySemester(tableId, semesterId)
+        if (records.isNotEmpty()) insertAll(records)
+    }
+}
+
 // 课表 Room 本地数据库
 @Database(
     entities = [
@@ -211,11 +246,49 @@ interface ScheduleDao {
         CourseTable::class,
         Course::class,
         CourseEvent::class,
-        CourseAdjustment::class
+        CourseAdjustment::class,
+        ExamRecord::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class ScheduleDatabase : RoomDatabase() {
     abstract fun scheduleDao(): ScheduleDao
+    abstract fun examDao(): ExamDao
+}
+
+// 数据库 1 → 2：新增考试记录表与查询索引
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS `exam_records` (
+                `id` TEXT NOT NULL,
+                `tableId` TEXT NOT NULL,
+                `semesterId` TEXT NOT NULL,
+                `courseId` TEXT,
+                `examType` TEXT NOT NULL,
+                `sequence` INTEGER NOT NULL,
+                `courseCode` TEXT NOT NULL,
+                `courseName` TEXT NOT NULL,
+                `examDate` TEXT,
+                `week` INTEGER,
+                `weekday` INTEGER,
+                `startTime` TEXT,
+                `endTime` TEXT,
+                `position` TEXT,
+                `seatNo` TEXT,
+                `status` TEXT,
+                `remark` TEXT NOT NULL,
+                `arrangeText` TEXT NOT NULL,
+                `updatedAt` INTEGER NOT NULL,
+                PRIMARY KEY(`id`)
+            )
+            """.trimIndent()
+        )
+        db.execSQL(
+            "CREATE INDEX IF NOT EXISTS `index_exam_records_semester` " +
+                "ON `exam_records` (`tableId`, `semesterId`, `examDate`)"
+        )
+    }
 }

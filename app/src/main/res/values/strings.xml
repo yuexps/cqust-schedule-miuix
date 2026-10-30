@@ -149,6 +149,10 @@
     <string name="calendar_delete_fail_toast">删除失败，请检查日历权限</string>
     <string name="calendar_event_desc_adjusted">【临时调课安排】</string>
     <string name="calendar_event_location_teacher_format">%1$s %2$s</string>
+    <string name="calendar_exam_title_format">[考] %1$s</string>
+    <string name="calendar_exam_location_format">%1$s %2$s号座位</string>
+    <string name="calendar_exam_desc_type_format">考试类型：%1$s</string>
+    <string name="calendar_exam_desc_status_format">考试情况：%1$s</string>
 
     <!-- 课前提醒设置子页面 -->
     <string name="reminder_title">课前通知提醒</string>
@@ -210,9 +214,9 @@
     <!-- 课程总览与详情页面 -->
     <string name="course_overview_title">课程总览</string>
     <string name="course_overview_credit_format">%1$s 学分</string>
-    <string name="course_summary_prefix">本学期共 </string>
-    <string name="course_summary_unit_courses"> 门课程，</string>
-    <string name="course_summary_unit_slots"> 个时段</string>
+    <string name="course_summary_prefix">本学期课程共 </string>
+    <string name="course_summary_unit_theory"> 理论 + </string>
+    <string name="course_summary_unit_practical"> 实践</string>
     <string name="course_summary_prefix_credits"> · 累计 </string>
     <string name="course_summary_unit_credits"> 学分</string>
     <string name="course_empty_data">暂无已同步的课程数据</string>
@@ -225,6 +229,13 @@
     <string name="course_overview_badge_combined">理论 + 实践</string>
     <string name="course_overview_section_theory">理论教学</string>
     <string name="course_overview_section_practical">实践教学</string>
+    <string name="course_overview_section_exam">期末考试</string>
+    <string name="exam_mode_written">标考</string>
+    <string name="exam_mode_non_standard">非标</string>
+    <string name="exam_date_format">%1$d月%2$d日</string>
+    <string name="exam_datetime_format">%1$s %2$s %3$s-%4$s</string>
+    <string name="exam_seat_number_format">%1$s号座位</string>
+    <string name="exam_week_format">第%1$d周</string>
 
     <!-- 小组件 -->
     <string name="widget_schedule_name">课程表</string>

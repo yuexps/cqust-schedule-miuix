@@ -5,7 +5,9 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import top.msfxp.schedule.data.api.CqustSyncManager
+import top.msfxp.schedule.data.db.MIGRATION_1_2
 import top.msfxp.schedule.data.db.ScheduleDatabase
+import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import top.msfxp.schedule.service.CalendarSyncHelper
@@ -25,21 +27,25 @@ val appModule = module {
             get(),
             ScheduleDatabase::class.java,
             "cqust_schedule_database"
-        ).fallbackToDestructiveMigration(dropAllTables = true).build()
+        ).addMigrations(MIGRATION_1_2)
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
     }
     single { get<ScheduleDatabase>().scheduleDao() }
+    single { get<ScheduleDatabase>().examDao() }
 
     // 仓库层
     single { SettingsRepository(get()) }
     single { ScheduleRepository(get()) }
+    single { ExamRepository(get(), get()) }
 
     // 服务与同步组件
-    single { CalendarSyncHelper(get(), get(), get()) }
-    single { CqustSyncManager(get(), get()) }
+    single { CalendarSyncHelper(get(), get(), get(), get()) }
+    single { CqustSyncManager(get(), get(), get()) }
 
     // 课表与闹钟调度观察器
     single(createdAtStart = true) {
-        CourseAlarmObserver(androidContext(), get(), get(), get()).apply {
+        CourseAlarmObserver(androidContext(), get(), get(), get(), get()).apply {
             startObserving()
         }
     }
@@ -48,7 +54,7 @@ val appModule = module {
     viewModel { WeeklyScheduleViewModel(androidContext(), get(), get(), get()) }
     viewModel { SettingsViewModel(androidContext(), get(), get(), get(), get()) }
     viewModel { CqustLoginViewModel(androidContext(), get(), get()) }
-    viewModel { CourseOverviewViewModel(get(), get()) }
+    viewModel { CourseOverviewViewModel(get(), get(), get()) }
     viewModel { PersonalizationViewModel(get(), get()) }
     viewModel { AboutViewModel(get()) }
 }

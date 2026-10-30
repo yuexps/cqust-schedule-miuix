@@ -6,24 +6,40 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import top.msfxp.schedule.data.model.COURSE_TYPE_PRACTICAL
 import top.msfxp.schedule.data.model.COURSE_TYPE_THEORY
+import top.msfxp.schedule.data.model.Course
+import top.msfxp.schedule.data.model.EXAM_TYPE_FINAL
+import top.msfxp.schedule.data.model.ExamFetchResult
+import top.msfxp.schedule.data.model.ExamRecord
+import top.msfxp.schedule.data.model.RawExamItem
 import top.msfxp.schedule.data.model.Semester
 import top.msfxp.schedule.data.model.StudentProfile
+import top.msfxp.schedule.data.model.buildExamRecordId
 import top.msfxp.schedule.data.model.effectiveStartDate
+import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 
 // 同步结果统计数据模型
 data class SyncResultSummary(
     val regularCount: Int,
-    val practicalCount: Int
+    val practicalCount: Int,
+    val examCount: Int = 0
 ) {
     val totalCount: Int get() = regularCount + practicalCount
 }
 
+// 课表与考试并发抓取结果
+private data class ScheduleFetchBundle(
+    val eamsResult: EamsFetchResult,
+    val practicalItems: List<RawPracticalItem>,
+    val examResult: ExamFetchResult? = null
+)
+
 // 课表数据同步服务协调器
 class CqustSyncManager(
     private val settingsRepository: SettingsRepository,
-    private val scheduleRepository: ScheduleRepository
+    private val scheduleRepository: ScheduleRepository,
+    private val examRepository: ExamRepository
 ) {
 
     // 登录教务并同步课表到本地数据库
@@ -47,9 +63,11 @@ class CqustSyncManager(
         }
         val session = connectResult.getOrThrow()
 
-        // 2. 抓取课表数据
+        // 2. 抓取课表与考试数据
         onProgress?.invoke("正在同步课表数据")
-        val (eamsResult, practicalItems) = fetchScheduleData(session, sid, targetSemesterId, onProgress)
+        val fetchBundle = fetchScheduleData(session, sid, targetSemesterId, onProgress)
+        val eamsResult = fetchBundle.eamsResult
+        val practicalItems = fetchBundle.practicalItems
 
         if (!eamsResult.success) {
             return@withContext Result.failure(Exception(eamsResult.errorMessage ?: "教务课表解析失败"))
@@ -71,23 +89,38 @@ class CqustSyncManager(
             scheduleRepository.saveSchedule(tableId, courses, events)
             saveSemesters(eamsResult)
             persistProfileAndCredentials(sid, pwd, eamsResult.profile)
+            val examCount = saveExams(
+                result = fetchBundle.examResult,
+                tableId = tableId,
+                semesterId = eamsResult.semesterId.orEmpty(),
+                courses = courses
+            )
 
             val regularCount = courses.count { it.courseType == COURSE_TYPE_THEORY }
             val practicalCount = courses.count { it.courseType == COURSE_TYPE_PRACTICAL }
-            Result.success(SyncResultSummary(regularCount = regularCount, practicalCount = practicalCount))
+            Result.success(
+                SyncResultSummary(
+                    regularCount = regularCount,
+                    practicalCount = practicalCount,
+                    examCount = examCount
+                )
+            )
         } catch (e: Exception) {
             Result.failure(Exception("课表数据入库失败: ${e.message}", e))
         }
     }
 
-    // 并发协同抓取教务常规课表与实践教学课表
+    // 并发协同抓取教务常规课表、实践课表与考试安排
     private suspend fun fetchScheduleData(
         session: CqustWebVpnSession,
         studentId: String,
         targetSemesterId: String?,
         onProgress: ((String) -> Unit)?
-    ): Pair<EamsFetchResult, List<RawPracticalItem>> {
-        val (eamsResult, practicalResult) = coroutineScope {
+    ): ScheduleFetchBundle {
+        val currentSemesterId = scheduleRepository.getCurrentSemesterOnce()?.id
+        val shouldFetchExams = targetSemesterId == null || targetSemesterId == currentSemesterId
+
+        val (eamsResult, practicalResult, examResult) = coroutineScope {
             val eamsDeferred = async {
                 CqustEamsParser.fetchAndParse(
                     session = session,
@@ -105,8 +138,14 @@ class CqustSyncManager(
                     )
                 }
             } else null
+            val examDeferred = if (shouldFetchExams) {
+                async {
+                    onProgress?.invoke("正在获取考试安排")
+                    CqustExamParser.fetchAndParse(session)
+                }
+            } else null
 
-            eamsDeferred.await() to practicalDeferred?.await()
+            Triple(eamsDeferred.await(), practicalDeferred?.await(), examDeferred?.await())
         }
 
         var practicalItems = emptyList<RawPracticalItem>()
@@ -124,7 +163,56 @@ class CqustSyncManager(
             }
         }
 
-        return Pair(eamsResult, practicalItems)
+        return ScheduleFetchBundle(eamsResult, practicalItems, examResult)
+    }
+
+    // 保存考试记录并匹配课程归属
+    private suspend fun saveExams(
+        result: ExamFetchResult?,
+        tableId: String,
+        semesterId: String,
+        courses: List<Course>
+    ): Int {
+        if (result == null || !result.success || semesterId.isBlank()) return 0
+        val now = System.currentTimeMillis()
+        val records = result.items.map { item ->
+            ExamRecord(
+                id = buildExamRecordId(tableId, semesterId, item),
+                tableId = tableId,
+                semesterId = semesterId,
+                courseId = matchCourseId(item, courses),
+                examType = item.examType.ifBlank { EXAM_TYPE_FINAL },
+                sequence = item.sequence,
+                courseCode = item.courseCode,
+                courseName = item.courseName,
+                examDate = item.examDate,
+                week = item.week,
+                weekday = item.weekday,
+                startTime = item.startTime,
+                endTime = item.endTime,
+                position = item.position,
+                seatNo = item.seatNo,
+                status = item.status,
+                remark = item.remark,
+                arrangeText = item.arrangeText,
+                updatedAt = now
+            )
+        }
+        examRepository.replaceSemesterExams(tableId, semesterId, records)
+        return records.size
+    }
+
+    // 按课程代码与名称匹配考试所属课程
+    private fun matchCourseId(item: RawExamItem, courses: List<Course>): String? {
+        val theory = courses.filter { it.courseType == COURSE_TYPE_THEORY }
+        val practical = courses.filter { it.courseType == COURSE_TYPE_PRACTICAL }
+        val baseCode = item.courseCode.substringBefore('.').trim()
+
+        theory.firstOrNull { it.courseCode == item.courseCode }?.let { return it.id }
+        theory.firstOrNull { it.courseCode.substringBefore('.').trim() == baseCode }?.let { return it.id }
+        practical.firstOrNull { it.courseCode == item.courseCode }?.let { return it.id }
+        return (theory.firstOrNull { it.name == item.courseName }
+            ?: practical.firstOrNull { it.name == item.courseName })?.id
     }
 
     // 保存学期列表至本地数据库

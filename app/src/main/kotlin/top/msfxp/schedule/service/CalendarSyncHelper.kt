@@ -13,7 +13,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import top.msfxp.schedule.R
 import top.msfxp.schedule.data.model.DefaultTimeSlots
+import top.msfxp.schedule.data.model.ExamRecord
 import top.msfxp.schedule.data.model.effectiveStartDate
+import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import java.time.LocalDateTime
@@ -25,7 +27,8 @@ import java.util.TimeZone
 class CalendarSyncHelper(
     private val context: Context,
     private val settingsRepository: SettingsRepository,
-    private val scheduleRepository: ScheduleRepository
+    private val scheduleRepository: ScheduleRepository,
+    private val examRepository: ExamRepository
 ) {
     companion object {
         private const val LEGACY_CALENDAR_ACCOUNT_NAME = "cqust_schedule_account"
@@ -131,6 +134,9 @@ class CalendarSyncHelper(
                     }
                 }
 
+                // 追加有时间地点的考试日程
+                appendExamEvents(desiredList, tableId, currentSemester.id, calendarRemindMinutes)
+
                 // 精细化增量同步，不全量删除已存在的事件
                 incrementalSyncCalendarEvents(calendarId, desiredList)
             } catch (e: Exception) {
@@ -138,6 +144,45 @@ class CalendarSyncHelper(
                 false
             }
         }
+    }
+
+    // 追加考试日程至待同步列表
+    private suspend fun appendExamEvents(
+        desiredList: MutableList<DesiredCalendarEvent>,
+        tableId: String,
+        semesterId: String,
+        remindMinutes: Int
+    ) {
+        examRepository.getExamsOnce(tableId, semesterId)
+            .mapNotNull { buildExamCalendarEvent(it, remindMinutes) }
+            .forEach { desiredList.add(it) }
+    }
+
+    // 构建考试日程条目
+    private fun buildExamCalendarEvent(exam: ExamRecord, remindMinutes: Int): DesiredCalendarEvent? {
+        val date = exam.examDateValue ?: return null
+        val start = exam.startTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: return null
+        val end = exam.endTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: return null
+        val zoneId = ZoneId.systemDefault()
+        val location = exam.seatNo?.takeIf { it.isNotBlank() }?.let { seat ->
+            context.getString(R.string.calendar_exam_location_format, exam.position.orEmpty(), seat)
+        } ?: exam.position.orEmpty()
+        val description = buildString {
+            append(context.getString(R.string.calendar_exam_desc_type_format, exam.examType))
+            if (!exam.status.isNullOrBlank()) {
+                append("\n").append(context.getString(R.string.calendar_exam_desc_status_format, exam.status))
+            }
+            if (exam.remark.isNotBlank()) append("\n").append(exam.remark)
+        }
+        return DesiredCalendarEvent(
+            syncKey = "cqust_exam_${exam.id}",
+            title = context.getString(R.string.calendar_exam_title_format, exam.courseName),
+            location = location,
+            description = description,
+            startMillis = LocalDateTime.of(date, start).atZone(zoneId).toInstant().toEpochMilli(),
+            endMillis = LocalDateTime.of(date, end).atZone(zoneId).toInstant().toEpochMilli(),
+            remindMinutes = remindMinutes
+        )
     }
 
     // 精细化增量更新日历事件与关联提醒

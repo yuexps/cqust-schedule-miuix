@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import top.msfxp.schedule.data.model.*
+import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 
@@ -23,19 +24,21 @@ data class CourseGroupItem(
     val theorySlots: List<CompressedCourseSlot> = emptyList(),
     val practicalSlots: List<CompressedCourseSlot> = emptyList(),
     val isPracticalOnly: Boolean = false,
-    val projectCount: Int = 0
+    val projectCount: Int = 0,
+    val exams: List<ExamRecord> = emptyList()
 ) {
     val hasTheory: Boolean get() = theorySlots.isNotEmpty()
     val hasPractical: Boolean get() = practicalSlots.isNotEmpty()
-    val totalSlotCount: Int get() = theorySlots.size + practicalSlots.size
+    val hasExam: Boolean get() = exams.isNotEmpty()
     val primaryTeacher: String get() = theoryTeacher.ifBlank { practicalTeacher }
 }
 
 // 课程概览界面状态
 data class CourseOverviewUiState(
     val courses: List<CourseGroupItem> = emptyList(),
-    val uniqueCount: Int = 0,
-    val totalSlots: Int = 0,
+    val unmatchedExams: List<ExamRecord> = emptyList(),
+    val theoryCount: Int = 0,
+    val practicalCount: Int = 0,
     val totalCredits: Double = 0.0,
     val courseColors: List<CourseColor> = DefaultCourseColors
 )
@@ -43,15 +46,18 @@ data class CourseOverviewUiState(
 // 课程概览视图模型
 class CourseOverviewViewModel(
     scheduleRepository: ScheduleRepository,
-    settingsRepository: SettingsRepository
+    settingsRepository: SettingsRepository,
+    examRepository: ExamRepository
 ) : ViewModel() {
 
     // 响应式聚合课程概览状态
     val uiState: StateFlow<CourseOverviewUiState> = combine(
         scheduleRepository.allCoursesFlow,
-        settingsRepository.appSettingsFlow
-    ) { allCourses, settings ->
+        settingsRepository.appSettingsFlow,
+        examRepository.currentSemesterExamsFlow
+    ) { allCourses, settings, exams ->
         val palette = parseCoursePaletteJson(settings.customCourseColorsJson)
+        val examsByCourseId = exams.filter { !it.courseId.isNullOrBlank() }.groupBy { it.courseId }
         val groups = allCourses.groupBy { it.course.name }.map { (courseName, courseWithEventsList) ->
             val theoryCourse = courseWithEventsList.find { !it.course.isPractical }
             val practicalCourse = courseWithEventsList.find { it.course.isPractical }
@@ -97,14 +103,19 @@ class CourseOverviewViewModel(
                 theorySlots = theorySlots,
                 practicalSlots = practicalSlots,
                 isPracticalOnly = theoryCourse == null && practicalCourse != null,
-                projectCount = projectCount
+                projectCount = projectCount,
+                exams = courseWithEventsList
+                    .flatMap { relation -> examsByCourseId[relation.course.id].orEmpty() }
+                    .distinctBy { it.id }
             )
         }.sortedBy { it.name }
 
+        val courseIds = groups.map { it.courseId }.toSet()
         CourseOverviewUiState(
             courses = groups,
-            uniqueCount = groups.size,
-            totalSlots = groups.sumOf { it.totalSlotCount },
+            unmatchedExams = exams.filter { it.courseId.isNullOrBlank() || it.courseId !in courseIds },
+            theoryCount = groups.count { it.hasTheory },
+            practicalCount = groups.count { it.hasPractical },
             totalCredits = groups.sumOf { it.credit.toDoubleOrNull() ?: 0.0 },
             courseColors = palette
         )
