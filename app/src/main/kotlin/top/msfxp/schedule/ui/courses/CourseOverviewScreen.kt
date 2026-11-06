@@ -21,6 +21,7 @@ import top.msfxp.schedule.R
 import top.msfxp.schedule.data.model.DefaultCourseColors
 import top.msfxp.schedule.data.model.EXAM_MODE_WRITTEN
 import top.msfxp.schedule.data.model.ExamRecord
+import top.msfxp.schedule.data.model.findSectionTimeSlot
 import top.msfxp.schedule.data.model.formatWeeksSummary
 import top.msfxp.schedule.data.model.getCourseColor
 import top.yukonga.miuix.kmp.basic.*
@@ -307,7 +308,6 @@ fun CourseOverviewScreen(
                                 )
                             }
 
-                            // 期末考试区块
                             if (item.hasExam) {
                                 CourseExamSection(
                                     exams = item.exams,
@@ -406,8 +406,14 @@ private fun CourseSlotListBlock(
             val isUnarranged = slotItem.day == 0 || slotItem.startSection == 0
             val dayStr = if (isUnarranged) stringResource(R.string.course_pending_location)
             else dayNames.getOrElse(slotItem.day - 1) { stringResource(R.string.day_number_format, slotItem.day) }
-            val secStr = if (isUnarranged) stringResource(R.string.course_practice_training)
-            else stringResource(R.string.course_section_format, slotItem.startSection, slotItem.endSection)
+            val slotStart = findSectionTimeSlot(slotItem.startSection)
+            val slotEnd = findSectionTimeSlot(slotItem.endSection) ?: slotStart
+            val secStr = when {
+                isUnarranged -> stringResource(R.string.course_practice_training)
+                slotItem.startSection < 0 && slotStart != null && slotEnd != null ->
+                    "${slotStart.startTime} - ${slotEnd.endTime}"
+                else -> stringResource(R.string.course_section_format, slotItem.startSection, slotItem.endSection)
+            }
             val weeksStr = slotItem.weeks.formatWeeksSummary()
 
             Row(
@@ -485,7 +491,7 @@ private fun CourseSlotListBlock(
     }
 }
 
-// 课程卡内期末考试区块
+// 课程卡内考试安排区块
 @Composable
 private fun CourseExamSection(
     exams: List<ExamRecord>,
@@ -495,7 +501,6 @@ private fun CourseExamSection(
 ) {
     if (exams.isEmpty()) return
     val sharedMode = exams.map { it.examMode }.distinct().singleOrNull()
-    val sharedType = exams.map { it.examType }.filter { it.isNotBlank() }.distinct().singleOrNull()
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -506,7 +511,7 @@ private fun CourseExamSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = sharedType ?: stringResource(R.string.course_overview_section_exam),
+                text = stringResource(R.string.exam_type_label),
                 style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.Bold),
                 color = MiuixTheme.colorScheme.onSurface
             )
@@ -636,7 +641,7 @@ private fun UnmatchedExamCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = stringResource(R.string.course_overview_section_exam),
+                text = stringResource(R.string.exam_type_label),
                 style = MiuixTheme.textStyles.title3.copy(fontWeight = FontWeight.Bold),
                 color = MiuixTheme.colorScheme.onSurface
             )

@@ -149,27 +149,30 @@ class WeeklyScheduleViewModel(
 
         val allMetaEvents = allCourses.flatMap { c ->
             val allCourseWeeks = c.events.map { it.week }.filter { it > 0 }.distinct().sorted()
-            c.events.filter { it.week in 1..totalWeeks && it.day in 1..7 && it.startSection > 0 }
+            c.events.filter { it.week in 1..totalWeeks && it.day in 1..7 }
                 .map { ev -> ev.toMeta(c.course, allCourseWeeks) }
         }
 
         for (w in 1..totalWeeks) {
-            val weekEvents = allCourses.flatMap { c ->
+            // 有星期的事件参与调课计算，含非标准作息节次
+            val scheduledEvents = allCourses.flatMap { c ->
                 val allCourseWeeks = c.events.map { it.week }.filter { it > 0 }.distinct().sorted()
-                c.events.filter { it.week == w && it.day in 1..7 && it.startSection > 0 }
+                c.events.filter { it.week == w && it.day in 1..7 }
                     .map { ev -> ev.toMeta(c.course, allCourseWeeks) }
             }
             val weekUnarranged = allCourses.flatMap { c ->
                 val allCourseWeeks = c.events.map { it.week }.filter { it > 0 }.distinct().sorted()
-                c.events.filter { it.week == w && (it.day == 0 || it.startSection == 0) }
+                c.events.filter { it.week == w && it.day == 0 }
                     .map { ev -> ev.toMeta(c.course, allCourseWeeks) }
             }
 
-            val adjustedWeekEvents = applyAdjustmentsToWeekEvents(weekEvents, adjustments, w, allMetaEvents)
+            val adjustedScheduled = applyAdjustmentsToWeekEvents(scheduledEvents, adjustments, w, allMetaEvents)
+            // 落到标准作息的进网格，非标准作息节次留在待安排区
+            val adjustedWeekEvents = adjustedScheduled.filter { it.startSection > 0 }
             val adjustedUnarranged = weekUnarranged.filter { unarr ->
                 val adj = adjustments.find { it.originalWeek == w && it.courseId == unarr.courseId && it.originalDay == 0 }
                 adj == null || (!adj.isSuspended && adj.targetDay == 0)
-            }
+            } + adjustedScheduled.filter { it.startSection <= 0 }
 
             countMap[w] = adjustedWeekEvents.size + adjustedUnarranged.size
             blocksMap[w] = adjustedWeekEvents.toMergedBlocks()

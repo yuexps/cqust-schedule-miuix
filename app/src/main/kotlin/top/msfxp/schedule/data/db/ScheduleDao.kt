@@ -14,55 +14,8 @@ interface ScheduleDao {
     @Query("SELECT * FROM course_tables LIMIT 1")
     fun getDefaultCourseTable(): Flow<CourseTable?>
 
-    @Query("SELECT * FROM course_tables WHERE id = :tableId LIMIT 1")
-    suspend fun getCourseTableById(tableId: String): CourseTable?
-
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCourseTable(table: CourseTable)
-
-    // 查询指定周已排时段教学事件
-    @Transaction
-    @Query("""
-        SELECT 
-            e.id, e.courseId, e.tableId, e.week, e.day, e.startSection, e.endSection,
-            e.location, e.teacher, e.projectName, e.studentCount,
-            c.name as courseName, c.courseCode as courseCode, c.credit as credit,
-            c.category as category, c.courseType as courseType, c.colorIndex as colorIndex
-        FROM course_events e
-        INNER JOIN courses c ON e.courseId = c.id
-        WHERE e.tableId = :tableId AND e.week = :week AND e.day > 0 AND e.startSection > 0
-        ORDER BY e.day ASC, e.startSection ASC
-    """)
-    fun getWeekGridEvents(tableId: String, week: Int): Flow<List<CourseEventWithMeta>>
-
-    // 查询指定周未排时段教学事件
-    @Transaction
-    @Query("""
-        SELECT 
-            e.id, e.courseId, e.tableId, e.week, e.day, e.startSection, e.endSection,
-            e.location, e.teacher, e.projectName, e.studentCount,
-            c.name as courseName, c.courseCode as courseCode, c.credit as credit,
-            c.category as category, c.courseType as courseType, c.colorIndex as colorIndex
-        FROM course_events e
-        INNER JOIN courses c ON e.courseId = c.id
-        WHERE e.tableId = :tableId AND e.week = :week AND (e.day = 0 OR e.startSection = 0)
-    """)
-    fun getWeekUnarrangedEvents(tableId: String, week: Int): Flow<List<CourseEventWithMeta>>
-
-    // 查询指定周与星期的已排教学事件
-    @Transaction
-    @Query("""
-        SELECT 
-            e.id, e.courseId, e.tableId, e.week, e.day, e.startSection, e.endSection,
-            e.location, e.teacher, e.projectName, e.studentCount,
-            c.name as courseName, c.courseCode as courseCode, c.credit as credit,
-            c.category as category, c.courseType as courseType, c.colorIndex as colorIndex
-        FROM course_events e
-        INNER JOIN courses c ON e.courseId = c.id
-        WHERE e.tableId = :tableId AND e.week = :week AND e.day = :day AND e.startSection > 0
-        ORDER BY e.startSection ASC
-    """)
-    suspend fun getDayEvents(tableId: String, week: Int, day: Int): List<CourseEventWithMeta>
 
     // 提取全学期教学事件
     @Transaction
@@ -74,7 +27,7 @@ interface ScheduleDao {
             c.category as category, c.courseType as courseType, c.colorIndex as colorIndex
         FROM course_events e
         INNER JOIN courses c ON e.courseId = c.id
-        WHERE e.tableId = :tableId AND e.day > 0 AND e.startSection > 0
+        WHERE e.tableId = :tableId AND e.day > 0 AND e.startSection != 0
         ORDER BY e.week ASC, e.day ASC, e.startSection ASC
     """)
     suspend fun getAllEventsForTable(tableId: String): List<CourseEventWithMeta>
@@ -131,9 +84,6 @@ interface ScheduleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSemesters(semesters: List<Semester>)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertSemester(semester: Semester)
 
     @Query("UPDATE semesters SET isCurrent = CASE WHEN id = :activeSemesterId THEN 1 ELSE 0 END")
     suspend fun setActiveSemester(activeSemesterId: String)
@@ -198,9 +148,6 @@ interface ScheduleDao {
 
     @Query("DELETE FROM course_adjustments WHERE id = :id")
     suspend fun deleteAdjustmentById(id: Long)
-
-    @Query("DELETE FROM course_adjustments WHERE tableId = :tableId AND semesterId = :semesterId")
-    suspend fun clearAdjustmentsBySemester(tableId: String, semesterId: String)
 
     @Query("DELETE FROM course_adjustments WHERE tableId = :tableId")
     suspend fun clearAllAdjustments(tableId: String)

@@ -129,7 +129,7 @@ fun ScheduleGrid(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(SectionHeight * 11)
+                            .height(SectionHeight * DefaultTimeSlots.size)
                     ) {
                         // 背景网格分割线
                         val dividerColor = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.12f)
@@ -267,7 +267,7 @@ private fun ScheduleTimeColumn(
         modifier = Modifier.width(TimeColumnWidth),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        for (section in 1..11) {
+        for (section in 1..DefaultTimeSlots.size) {
             val slot = effectiveSlots.find { it.sectionNumber == section }
             val isCurrentSection = section == currentSectionNumber && isCurrentWeek
 

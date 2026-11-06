@@ -7,7 +7,7 @@ import kotlinx.coroutines.withContext
 import top.msfxp.schedule.data.model.COURSE_TYPE_PRACTICAL
 import top.msfxp.schedule.data.model.COURSE_TYPE_THEORY
 import top.msfxp.schedule.data.model.Course
-import top.msfxp.schedule.data.model.EXAM_TYPE_FINAL
+import top.msfxp.schedule.data.model.EXAM_TYPE_DEFAULT
 import top.msfxp.schedule.data.model.ExamFetchResult
 import top.msfxp.schedule.data.model.ExamRecord
 import top.msfxp.schedule.data.model.RawExamItem
@@ -184,7 +184,7 @@ class CqustSyncManager(
                 tableId = tableId,
                 semesterId = semesterId,
                 courseId = matchCourseId(item, courses),
-                examType = item.examType.ifBlank { EXAM_TYPE_FINAL },
+                examType = item.examType.ifBlank { EXAM_TYPE_DEFAULT },
                 sequence = item.sequence,
                 courseCode = item.courseCode,
                 courseName = item.courseName,

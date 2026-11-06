@@ -29,7 +29,7 @@ import top.msfxp.schedule.data.model.CourseEventWithMeta
 import top.msfxp.schedule.data.model.DefaultCourseColors
 import top.msfxp.schedule.data.model.ExamRecord
 import top.msfxp.schedule.data.model.ScheduleGridCell
-import top.msfxp.schedule.data.model.TimeSlot
+import top.msfxp.schedule.data.model.findSectionTimeSlot
 import top.msfxp.schedule.data.model.getCourseColor
 import top.msfxp.schedule.util.MapNavigationHelper
 import top.yukonga.miuix.kmp.basic.Icon
@@ -48,7 +48,6 @@ internal sealed interface CellDetailPage {
 @Composable
 fun CellDetailSheet(
     cell: ScheduleGridCell?,
-    timeSlots: List<TimeSlot> = emptyList(),
     currentWeekNumber: Int = 1,
     totalWeeks: Int = 20,
     currentSemesterId: String = "",
@@ -180,12 +179,12 @@ fun CellDetailSheet(
                     is CellDetailPage.Exam -> ExamDetailPage(
                         exam = item.exam,
                         themeColor = courseColors.getCourseColor(colorIndexResolver(item.exam)).light,
+                        currentWeekNumber = currentWeekNumber,
                         dayNames = dayNames,
                         onOpenMap = openMap
                     )
                     is CellDetailPage.Course -> CourseDetailPage(
                         event = item.event,
-                        timeSlots = timeSlots,
                         currentWeekNumber = currentWeekNumber,
                         courseThemeColor = courseColors.getCourseColor(item.event.colorIndex).light,
                         dayNames = dayNames,
@@ -260,7 +259,6 @@ fun CellDetailSheet(
 @Composable
 private fun CourseDetailPage(
     event: CourseEventWithMeta,
-    timeSlots: List<TimeSlot>,
     currentWeekNumber: Int,
     courseThemeColor: Color,
     dayNames: List<String>,
@@ -274,8 +272,8 @@ private fun CourseDetailPage(
     }
     val activeWeeksSet = event.weeks.toSet()
 
-    val startSlot = timeSlots.find { it.sectionNumber == event.startSection }
-    val endSlot = timeSlots.find { it.sectionNumber == event.endSection } ?: startSlot
+    val startSlot = findSectionTimeSlot(event.startSection)
+    val endSlot = findSectionTimeSlot(event.endSection) ?: startSlot
     val timeRangeStr = if (startSlot != null && endSlot != null) {
         "${startSlot.startTime} - ${endSlot.endTime}"
     } else {
@@ -307,6 +305,7 @@ private fun CourseDetailPage(
             timeRangeStr = timeRangeStr
         )
         CourseDetailWeeksMatrix(
+            label = stringResource(R.string.course_sheet_label_weeks),
             activeWeeksSet = activeWeeksSet,
             currentWeekNumber = currentWeekNumber,
             courseThemeColor = courseThemeColor

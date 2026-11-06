@@ -27,6 +27,10 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 fun App() {
     val themeController = remember { ThemeController(ColorSchemeMode.System) }
     val backStack = rememberNavBackStack<Route>(Route.Schedule)
+    // 目标页已在栈顶时忽略，防止同路由重复入栈崩溃
+    val navigate: (Route) -> Unit = remember {
+        { route -> if (backStack.lastOrNull() != route) backStack.add(route) }
+    }
 
     MiuixTheme(controller = themeController) {
         Surface(
@@ -41,10 +45,10 @@ fun App() {
                 entry<Route.Schedule> {
                     WeeklyScheduleScreen(
                         onNavigateToSettings = {
-                            backStack.add(Route.Settings)
+                            navigate(Route.Settings)
                         },
                         onNavigateToLogin = {
-                            backStack.add(Route.Login)
+                            navigate(Route.Login)
                         }
                     )
                 }
@@ -53,28 +57,28 @@ fun App() {
                 entry<Route.Settings> {
                     SettingsScreen(
                         onNavigateToLogin = {
-                            backStack.add(Route.Login)
+                            navigate(Route.Login)
                         },
                         onNavigateToOverview = {
-                            backStack.add(Route.CourseOverview)
+                            navigate(Route.CourseOverview)
                         },
                         onNavigateToPreClassReminder = {
-                            backStack.add(Route.PreClassReminderSettings)
+                            navigate(Route.PreClassReminderSettings)
                         },
                         onNavigateToCalendarSync = {
-                            backStack.add(Route.CalendarSyncSettings)
+                            navigate(Route.CalendarSyncSettings)
                         },
                         onNavigateToClassAutomation = {
-                            backStack.add(Route.ClassAutomationSettings)
+                            navigate(Route.ClassAutomationSettings)
                         },
                         onNavigateToPermissions = {
-                            backStack.add(Route.PermissionManagement)
+                            navigate(Route.PermissionManagement)
                         },
                         onNavigateToPersonalization = {
-                            backStack.add(Route.PersonalizationSettings)
+                            navigate(Route.PersonalizationSettings)
                         },
                         onNavigateToAbout = {
-                            backStack.add(Route.About)
+                            navigate(Route.About)
                         },
                         onBack = {
                             backStack.removeLastOrNull()
@@ -116,7 +120,7 @@ fun App() {
                             backStack.removeLastOrNull()
                         },
                         onNavigateToPermissions = {
-                            backStack.add(Route.PermissionManagement)
+                            navigate(Route.PermissionManagement)
                         }
                     )
                 }

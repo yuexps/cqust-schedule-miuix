@@ -35,6 +35,7 @@ internal val DetailPageMinHeight = 496.dp
 internal fun ExamDetailPage(
     exam: ExamRecord,
     themeColor: Color,
+    currentWeekNumber: Int,
     dayNames: List<String>,
     onOpenMap: (String) -> Unit
 ) {
@@ -67,6 +68,13 @@ internal fun ExamDetailPage(
         ExamDetailPropertiesGrid(
             exam = exam,
             timeRangeStr = timeRangeStr
+        )
+        // 教务返回的考试周次为权威值，缺失时回退所在网格周
+        CourseDetailWeeksMatrix(
+            label = stringResource(R.string.exam_detail_label_week),
+            activeWeeksSet = setOf(exam.week ?: currentWeekNumber),
+            currentWeekNumber = currentWeekNumber,
+            courseThemeColor = themeColor
         )
         Spacer(modifier = Modifier.height(4.dp))
     }
@@ -115,7 +123,7 @@ private fun ExamDetailHeader(
                         .padding(horizontal = 7.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = exam.examType,
+                        text = stringResource(R.string.exam_type_label),
                         style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
                         color = themeColor
                     )

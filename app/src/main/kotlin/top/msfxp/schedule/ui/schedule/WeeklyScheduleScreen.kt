@@ -327,7 +327,6 @@ fun WeeklyScheduleScreen(
     // 课表单元详情抽屉
     CellDetailSheet(
         cell = selectedCell,
-        timeSlots = uiState.timeSlots,
         currentWeekNumber = currentBrowsingWeek,
         totalWeeks = uiState.totalWeeks,
         currentSemesterId = uiState.currentSemesterId,

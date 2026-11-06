@@ -277,9 +277,10 @@ fun CourseDetailPropertiesGrid(
     }
 }
 
-// 全学期行课周次点阵图
+// 全学期周次点阵图
 @Composable
 fun CourseDetailWeeksMatrix(
+    label: String,
     activeWeeksSet: Set<Int>,
     currentWeekNumber: Int,
     courseThemeColor: Color
@@ -293,7 +294,7 @@ fun CourseDetailWeeksMatrix(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                text = stringResource(R.string.course_sheet_label_weeks),
+                text = label,
                 style = MiuixTheme.textStyles.footnote1.copy(fontWeight = FontWeight.Bold),
                 color = MiuixTheme.colorScheme.onSurface
             )

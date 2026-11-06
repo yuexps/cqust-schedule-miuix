@@ -230,7 +230,7 @@
     <string name="course_overview_badge_combined">理论 + 实践</string>
     <string name="course_overview_section_theory">理论教学</string>
     <string name="course_overview_section_practical">实践教学</string>
-    <string name="course_overview_section_exam">期末考试</string>
+    <string name="exam_type_label">考试安排</string>
     <string name="exam_mode_written">标考</string>
     <string name="exam_mode_non_standard">非标</string>
     <string name="exam_date_format">%1$d月%2$d日</string>
@@ -241,6 +241,7 @@
     <string name="exam_detail_title">考试详情</string>
     <string name="exam_detail_title_format">考试详情 (%1$d/%2$d)</string>
     <string name="exam_detail_label_time">考试时间</string>
+    <string name="exam_detail_label_week">考试周次</string>
     <string name="exam_detail_label_location">考试地点</string>
     <string name="exam_detail_label_seat">座位号</string>
     <string name="exam_detail_label_status">考试情况</string>

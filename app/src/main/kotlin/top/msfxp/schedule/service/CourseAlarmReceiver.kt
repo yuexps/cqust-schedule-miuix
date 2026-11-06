@@ -225,7 +225,7 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
 
     // 校验指定日期的节次当前是否仍有有效课程开始
     private suspend fun hasActiveCourseAtSlot(dateStr: String?, section: Int): Boolean {
-        if (section <= 0) return true
+        if (section == 0) return true
         val date = try {
             if (dateStr.isNullOrBlank()) LocalDate.now() else LocalDate.parse(dateStr)
         } catch (_: DateTimeParseException) {
@@ -238,7 +238,7 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
 
         val tableId = scheduleRepository.getOrCreateDefaultTableId()
         val allEvents = scheduleRepository.getAllEventsForTable(tableId)
-        val weekEvents = allEvents.filter { it.week == weekNumber && it.day == date.dayOfWeek.value && it.startSection > 0 }
+        val weekEvents = allEvents.filter { it.week == weekNumber && it.day == date.dayOfWeek.value }
         if (weekEvents.isEmpty()) return false
 
         val adjustments = scheduleRepository.getAdjustmentsOnce(tableId, semester.id)

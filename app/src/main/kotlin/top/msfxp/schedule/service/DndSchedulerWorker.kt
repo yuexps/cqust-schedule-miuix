@@ -19,8 +19,10 @@ import top.msfxp.schedule.data.model.CourseAdjustment
 import top.msfxp.schedule.data.model.CourseEventWithMeta
 import top.msfxp.schedule.data.model.DefaultTimeSlots
 import top.msfxp.schedule.data.model.ExamRecord
+import top.msfxp.schedule.data.model.NonStandardTimeSlots
 import top.msfxp.schedule.data.model.SemesterDateHelper
 import top.msfxp.schedule.data.model.effectiveStartDate
+import top.msfxp.schedule.data.model.findSectionTimeSlot
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
@@ -45,7 +47,11 @@ class DndSchedulerWorker(
         private const val WORK_NAME = "cqust_daily_dnd_scheduler"
         private const val IMMEDIATE_WORK_NAME = "cqust_immediate_dnd_scheduler"
 
-        private const val MAX_SECTION_COUNT = 12
+        private val MAX_SECTION_COUNT = DefaultTimeSlots.size
+
+        // 需排程与注销的节次集合，含非标准作息节次
+        private val SCHEDULABLE_SECTIONS =
+            NonStandardTimeSlots.map { it.sectionNumber } + (1..MAX_SECTION_COUNT)
         private const val MAX_EXAM_PER_DAY = 6
 
         // 注册后台周期性调度任务
@@ -126,7 +132,7 @@ class DndSchedulerWorker(
         }
 
         val dayOfWeek = targetDate.dayOfWeek.value
-        val weekEvents = scheduleContext.allEvents.filter { it.week == weekNumber && it.day in 1..7 && it.startSection > 0 }
+        val weekEvents = scheduleContext.allEvents.filter { it.week == weekNumber && it.day in 1..7 }
         val adjustedWeekEvents = applyAdjustmentsToWeekEvents(weekEvents, scheduleContext.adjustments, weekNumber, scheduleContext.allEvents)
         val dayEvents = adjustedWeekEvents.filter { it.day == dayOfWeek }
 
@@ -137,7 +143,8 @@ class DndSchedulerWorker(
         val endEvents = dayEvents.associateBy { it.endSection }
         val settings = scheduleContext.settings
 
-        for (section in 1..MAX_SECTION_COUNT) {
+        // 非标准作息节次与标准作息节次一并排程
+        for (section in SCHEDULABLE_SECTIONS) {
             val startEvent = startEvents[section]
             if (startEvent != null && settings.reminderEnabled) {
                 scheduleReminder(startEvent, targetDate, settings.remindBeforeMinutes, alarmManager)
@@ -213,7 +220,7 @@ class DndSchedulerWorker(
         remindMinutes: Int,
         alarmManager: AlarmManager
     ) {
-        val slot = DefaultTimeSlots.find { it.sectionNumber == event.startSection }
+        val slot = findSectionTimeSlot(event.startSection)
         val startTime = parseSlotTime(slot?.startTime, LocalTime.of(8, 30))
         val triggerMillis = LocalDateTime.of(targetDate, startTime)
             .minusMinutes(remindMinutes.toLong())
@@ -240,7 +247,7 @@ class DndSchedulerWorker(
         targetDate: LocalDate,
         alarmManager: AlarmManager
     ) {
-        val slot = DefaultTimeSlots.find { it.sectionNumber == event.startSection }
+        val slot = findSectionTimeSlot(event.startSection)
         val startTime = parseSlotTime(slot?.startTime, LocalTime.of(8, 30))
         val triggerMillis = LocalDateTime.of(targetDate, startTime)
             .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -262,7 +269,7 @@ class DndSchedulerWorker(
         targetDate: LocalDate,
         alarmManager: AlarmManager
     ) {
-        val slot = DefaultTimeSlots.find { it.sectionNumber == event.endSection }
+        val slot = findSectionTimeSlot(event.endSection)
         val endTime = parseSlotTime(slot?.endTime, LocalTime.of(9, 15))
         val triggerMillis = LocalDateTime.of(targetDate, endTime)
             .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -278,7 +285,7 @@ class DndSchedulerWorker(
 
     // 注销指定日期的所有时隙闹钟
     private fun cancelAllSlotsForDate(alarmManager: AlarmManager, targetDate: LocalDate) {
-        for (section in 1..MAX_SECTION_COUNT) {
+        for (section in SCHEDULABLE_SECTIONS) {
             cancelAlarm(alarmManager, buildRequestCode("REMIND", targetDate, section))
             cancelAlarm(alarmManager, buildRequestCode("DND_START", targetDate, section))
             cancelAlarm(alarmManager, buildRequestCode("DND_END", targetDate, section))

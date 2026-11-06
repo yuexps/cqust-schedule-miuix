@@ -47,10 +47,13 @@ fun CourseEditFlow(
     onDismissRequest: () -> Unit
 ) {
     var currentPage by remember { mutableStateOf(CourseEditPage.MENU) }
+    // 待安排课程（无星期或无节次）无法落位到网格，不提供调课入口
+    val canAdjust = event.day in 1..7 && event.startSection != 0
 
     when (currentPage) {
         CourseEditPage.MENU -> {
             CourseEditMenuSheet(
+                canAdjust = canAdjust,
                 onNavigateToPalette = { currentPage = CourseEditPage.PALETTE },
                 onNavigateToAdjustment = { currentPage = CourseEditPage.ADJUSTMENT },
                 onNavigateToRecords = { currentPage = CourseEditPage.RECORDS },
@@ -99,6 +102,7 @@ fun CourseEditFlow(
 // 二级页面：功能菜单
 @Composable
 private fun CourseEditMenuSheet(
+    canAdjust: Boolean,
     onNavigateToPalette: () -> Unit,
     onNavigateToAdjustment: () -> Unit,
     onNavigateToRecords: () -> Unit,
@@ -122,11 +126,13 @@ private fun CourseEditMenuSheet(
                         summary = stringResource(R.string.course_edit_menu_color_desc),
                         onClick = onNavigateToPalette
                     )
-                    ArrowPreference(
-                        title = stringResource(R.string.course_edit_menu_adjust),
-                        summary = stringResource(R.string.course_edit_menu_adjust_desc),
-                        onClick = onNavigateToAdjustment
-                    )
+                    if (canAdjust) {
+                        ArrowPreference(
+                            title = stringResource(R.string.course_edit_menu_adjust),
+                            summary = stringResource(R.string.course_edit_menu_adjust_desc),
+                            onClick = onNavigateToAdjustment
+                        )
+                    }
                     ArrowPreference(
                         title = stringResource(R.string.course_edit_menu_records),
                         summary = stringResource(R.string.course_edit_menu_records_desc),

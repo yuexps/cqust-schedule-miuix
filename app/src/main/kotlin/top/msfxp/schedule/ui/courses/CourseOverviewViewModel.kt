@@ -65,10 +65,10 @@ class CourseOverviewViewModel(
             val course = primaryCourse.course
 
             val theorySlots = theoryCourse?.toCompressedSlots()
-                ?.sortedWith(compareBy({ it.day }, { it.startSection }, { it.weeks.minOrNull() ?: 0 }))
+                ?.sortedWith(compareBy({ it.day }, { sectionTimeKey(it.startSection) }, { it.weeks.minOrNull() ?: 0 }))
                 .orEmpty()
             val practicalSlots = practicalCourse?.toCompressedSlots()
-                ?.sortedWith(compareBy({ it.weeks.minOrNull() ?: 0 }, { it.day }, { it.startSection }))
+                ?.sortedWith(compareBy({ it.weeks.minOrNull() ?: 0 }, { it.day }, { sectionTimeKey(it.startSection) }))
                 .orEmpty()
 
             val theoryTeacher = theoryCourse?.events

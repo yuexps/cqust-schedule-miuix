@@ -1,7 +1,7 @@
 package top.msfxp.schedule.data.api
 
 import io.ktor.client.statement.*
-import top.msfxp.schedule.data.model.EXAM_TYPE_FINAL
+import top.msfxp.schedule.data.model.EXAM_TYPE_DEFAULT
 import top.msfxp.schedule.data.model.ExamFetchResult
 import top.msfxp.schedule.data.model.RawExamItem
 import java.time.LocalDate
@@ -50,10 +50,10 @@ object CqustExamParser {
         }
     }
 
-    // 解析考试 HTML 片段
+    // 解析考试 HTML 片段，批次名取自页面工具栏
     fun parseExamHtml(html: String): List<RawExamItem> {
         val examType = TOOLBAR_REGEX.find(html)?.groupValues?.get(1)?.trim().orEmpty()
-            .ifBlank { EXAM_TYPE_FINAL }
+            .ifBlank { EXAM_TYPE_DEFAULT }
         return ROW_REGEX.findAll(html)
             .mapNotNull { parseRow(it.groupValues[1], examType) }
             .sortedWith(compareBy({ if (it.isScheduled) 0 else 1 }, { it.examDate.orEmpty() }, { it.startTime.orEmpty() }, { it.sequence }))

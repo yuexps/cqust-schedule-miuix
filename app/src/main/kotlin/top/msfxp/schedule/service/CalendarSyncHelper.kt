@@ -12,9 +12,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import top.msfxp.schedule.R
-import top.msfxp.schedule.data.model.DefaultTimeSlots
 import top.msfxp.schedule.data.model.ExamRecord
 import top.msfxp.schedule.data.model.effectiveStartDate
+import top.msfxp.schedule.data.model.findSectionTimeSlot
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
@@ -65,7 +65,6 @@ class CalendarSyncHelper(
 
                 val tableId = scheduleRepository.getOrCreateDefaultTableId()
                 val events = scheduleRepository.getAllEventsForTable(tableId)
-                val slots = DefaultTimeSlots
 
                 val calendarId = getOrCreateCalendarId()
                 if (calendarId == -1L) return@withLock false
@@ -77,12 +76,13 @@ class CalendarSyncHelper(
                 val usedKeys = mutableSetOf<String>()
 
                 for (w in 1..totalWeeks) {
-                    val weekRawEvents = events.filter { it.week == w && it.day in 1..7 && it.startSection > 0 }
+                    // 仅纳入有作息的课程事件，待安排项不写入日历
+                    val weekRawEvents = events.filter { it.week == w && it.day in 1..7 && it.startSection != 0 }
                     val weekAdjustedEvents = top.msfxp.schedule.data.repository.applyAdjustmentsToWeekEvents(weekRawEvents, adjustments, w, events)
 
                     weekAdjustedEvents.forEach { ev ->
-                        val startSlot = slots.find { it.sectionNumber == ev.startSection }
-                        val endSlot = slots.find { it.sectionNumber == ev.endSection } ?: startSlot
+                        val startSlot = findSectionTimeSlot(ev.startSection)
+                        val endSlot = findSectionTimeSlot(ev.endSection) ?: startSlot
 
                         val startTime = startSlot?.startTime ?: "08:30"
                         val endTime = endSlot?.endTime ?: "09:15"
@@ -168,7 +168,7 @@ class CalendarSyncHelper(
             context.getString(R.string.calendar_exam_location_format, exam.displayPosition, seat)
         } ?: exam.displayPosition
         val description = buildString {
-            append(context.getString(R.string.calendar_exam_desc_type_format, exam.examType))
+            append(context.getString(R.string.calendar_exam_desc_type_format, context.getString(R.string.exam_type_label)))
             if (!exam.status.isNullOrBlank()) {
                 append("\n").append(context.getString(R.string.calendar_exam_desc_status_format, exam.status))
             }

@@ -126,6 +126,21 @@ val DefaultTimeSlots = listOf(
     TimeSlot(11, "20:50", "21:35")
 )
 
+// 非标准作息节次（-1 中午1节、-2 中午2节，后续继续向下编号；作息为估计值）
+val NonStandardTimeSlots = listOf(
+    TimeSlot(-1, "12:10", "12:55"),
+    TimeSlot(-2, "13:05", "13:50")
+)
+
+// 按节次取作息：1..11 为标准作息节次，负数为非标准作息节次，0 待安排无作息
+fun findSectionTimeSlot(sectionNumber: Int): TimeSlot? =
+    DefaultTimeSlots.find { it.sectionNumber == sectionNumber }
+        ?: NonStandardTimeSlots.find { it.sectionNumber == sectionNumber }
+
+// 节次排序键，按作息时刻而非编号排序，未知作息排最后
+fun sectionTimeKey(sectionNumber: Int): String =
+    findSectionTimeSlot(sectionNumber)?.startTime ?: "99:99"
+
 // 调课规则实体
 @Entity(
     tableName = "course_adjustments",
@@ -230,10 +245,6 @@ data class CourseEventWithMeta(
         } else {
             courseName
         }
-
-    // 节次区间文本
-    val sectionRangeText: String
-        get() = if (startSection == endSection) "第${startSection}节" else "第${startSection}-${endSection}节"
 }
 
 // 转换为展示模型
@@ -289,7 +300,7 @@ data class CourseWithEvents(
             }
             .sortedWith(
                 compareBy<CompressedCourseSlot> { it.day }
-                    .thenBy { it.startSection }
+                    .thenBy { sectionTimeKey(it.startSection) }
                     .thenBy { it.weeks.minOrNull() ?: 0 }
                     .thenBy { it.projectName }
             )

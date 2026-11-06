@@ -9,8 +9,8 @@ import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.time.temporal.TemporalAdjusters
 
-// 考试批次与形式常量
-const val EXAM_TYPE_FINAL = "期末考试"
+// 考试批次与形式常量（期末考试结构已明确，期中考试结构未知暂用通用名，后续可区分；期待PR）
+const val EXAM_TYPE_DEFAULT = "考试安排"
 const val EXAM_MODE_WRITTEN = "标考"
 const val EXAM_MODE_NON_STANDARD = "非标"
 
@@ -19,7 +19,7 @@ data class RawExamItem(
     val sequence: Int,
     val courseCode: String,
     val courseName: String,
-    val examType: String = EXAM_TYPE_FINAL,
+    val examType: String = EXAM_TYPE_DEFAULT,
     val examDate: String? = null,
     val week: Int? = null,
     val weekday: Int? = null,
@@ -97,9 +97,10 @@ data class ExamRecord(
     val resolvedWeekday: Int?
         get() = examDateValue?.dayOfWeek?.value ?: weekday
 
-    // 按学期开学日期推算所属周次，日期缺失时使用教务解析值
+    // 优先使用教务返回的周次，缺失时按考试日期推算
     fun resolveWeek(semesterStart: LocalDate): Int? {
-        val date = examDateValue ?: return week
+        if (week != null) return week
+        val date = examDateValue ?: return null
         val startMonday = semesterStart.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         val examMonday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
         return (ChronoUnit.DAYS.between(startMonday, examMonday) / 7 + 1).toInt()
