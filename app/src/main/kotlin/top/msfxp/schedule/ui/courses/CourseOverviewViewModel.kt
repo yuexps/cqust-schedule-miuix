@@ -58,7 +58,7 @@ class CourseOverviewViewModel(
     ) { allCourses, settings, exams ->
         val palette = parseCoursePaletteJson(settings.customCourseColorsJson)
         val examsByCourseId = exams.filter { !it.courseId.isNullOrBlank() }.groupBy { it.courseId }
-        val groups = allCourses.groupBy { it.course.name }.map { (courseName, courseWithEventsList) ->
+        val groups = allCourses.groupBy { it.course.unifiedCode }.map { (_, courseWithEventsList) ->
             val theoryCourse = courseWithEventsList.find { !it.course.isPractical }
             val practicalCourse = courseWithEventsList.find { it.course.isPractical }
             val primaryCourse = theoryCourse ?: practicalCourse ?: courseWithEventsList.first()
@@ -94,7 +94,7 @@ class CourseOverviewViewModel(
             CourseGroupItem(
                 courseId = course.id,
                 courseCode = course.courseCode.ifBlank { practicalCourse?.course?.courseCode.orEmpty() },
-                name = courseName,
+                name = course.name,
                 credit = course.credit.ifBlank { practicalCourse?.course?.credit.orEmpty() },
                 category = course.category.ifBlank { practicalCourse?.course?.category.orEmpty() },
                 theoryTeacher = theoryTeacher,

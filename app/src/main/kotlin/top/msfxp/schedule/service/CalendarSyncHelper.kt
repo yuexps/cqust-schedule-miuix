@@ -165,8 +165,8 @@ class CalendarSyncHelper(
         val end = exam.endTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: return null
         val zoneId = ZoneId.systemDefault()
         val location = exam.seatNo?.takeIf { it.isNotBlank() }?.let { seat ->
-            context.getString(R.string.calendar_exam_location_format, exam.position.orEmpty(), seat)
-        } ?: exam.position.orEmpty()
+            context.getString(R.string.calendar_exam_location_format, exam.displayPosition, seat)
+        } ?: exam.displayPosition
         val description = buildString {
             append(context.getString(R.string.calendar_exam_desc_type_format, exam.examType))
             if (!exam.status.isNullOrBlank()) {

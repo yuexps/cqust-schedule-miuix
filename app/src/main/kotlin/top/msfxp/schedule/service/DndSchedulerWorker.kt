@@ -14,11 +14,14 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import top.msfxp.schedule.R
 import top.msfxp.schedule.data.model.CourseAdjustment
 import top.msfxp.schedule.data.model.CourseEventWithMeta
 import top.msfxp.schedule.data.model.DefaultTimeSlots
+import top.msfxp.schedule.data.model.ExamRecord
 import top.msfxp.schedule.data.model.SemesterDateHelper
 import top.msfxp.schedule.data.model.effectiveStartDate
+import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import top.msfxp.schedule.data.repository.applyAdjustmentsToWeekEvents
@@ -36,12 +39,14 @@ class DndSchedulerWorker(
 
     private val scheduleRepository: ScheduleRepository by inject()
     private val settingsRepository: SettingsRepository by inject()
+    private val examRepository: ExamRepository by inject()
 
     companion object {
         private const val WORK_NAME = "cqust_daily_dnd_scheduler"
         private const val IMMEDIATE_WORK_NAME = "cqust_immediate_dnd_scheduler"
 
         private const val MAX_SECTION_COUNT = 12
+        private const val MAX_EXAM_PER_DAY = 6
 
         // 注册后台周期性调度任务
         fun enqueuePeriodicWork(context: Context) {
@@ -74,7 +79,8 @@ class DndSchedulerWorker(
         val semester: top.msfxp.schedule.data.model.Semester,
         val allEvents: List<CourseEventWithMeta>,
         val adjustments: List<CourseAdjustment>,
-        val settings: top.msfxp.schedule.data.model.AppSettings
+        val settings: top.msfxp.schedule.data.model.AppSettings,
+        val exams: List<ExamRecord>
     )
 
     // 扫描今明两天课程并注册精确闹钟
@@ -91,12 +97,14 @@ class DndSchedulerWorker(
                 semester = currentSemester,
                 allEvents = allEvents,
                 adjustments = adjustments,
-                settings = settings
+                settings = settings,
+                exams = examRepository.getExamsOnce(tableId, currentSemester.id)
             )
 
             val today = LocalDate.now()
             for (targetDate in (0L..6L).map { today.plusDays(it) }) {
                 syncAlarmsForDate(targetDate, scheduleContext, alarmManager)
+                syncExamReminders(targetDate, scheduleContext, alarmManager)
             }
             Result.success()
         } catch (_: Exception) {
@@ -122,7 +130,10 @@ class DndSchedulerWorker(
         val adjustedWeekEvents = applyAdjustmentsToWeekEvents(weekEvents, scheduleContext.adjustments, weekNumber, scheduleContext.allEvents)
         val dayEvents = adjustedWeekEvents.filter { it.day == dayOfWeek }
 
-        val startEvents = dayEvents.associateBy { it.startSection }
+        // 同一节次优先取实践课
+        val startEvents = dayEvents
+            .groupBy { it.startSection }
+            .mapValues { (_, group) -> group.firstOrNull { it.isPractical } ?: group.first() }
         val endEvents = dayEvents.associateBy { it.endSection }
         val settings = scheduleContext.settings
 
@@ -147,6 +158,52 @@ class DndSchedulerWorker(
                 cancelAlarm(alarmManager, buildRequestCode("DND_END", targetDate, section))
             }
         }
+    }
+
+    // 注册当日考试提醒闹钟
+    private fun syncExamReminders(
+        targetDate: LocalDate,
+        scheduleContext: ScheduleContext,
+        alarmManager: AlarmManager
+    ) {
+        for (index in 0 until MAX_EXAM_PER_DAY) {
+            cancelAlarm(alarmManager, buildRequestCode("EXAM_REMIND", targetDate, index))
+        }
+        if (!scheduleContext.settings.reminderEnabled) return
+
+        val dateStr = targetDate.toString()
+        val exams = scheduleContext.exams.filter { it.isScheduled && it.examDate == dateStr }
+        exams.take(MAX_EXAM_PER_DAY).forEachIndexed { index, exam ->
+            val startTime = parseExamTime(exam.startTime) ?: return@forEachIndexed
+            val triggerMillis = LocalDateTime.of(targetDate, startTime)
+                .minusMinutes(scheduleContext.settings.remindBeforeMinutes.toLong())
+                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            if (triggerMillis <= System.currentTimeMillis()) return@forEachIndexed
+
+            val reqCode = buildRequestCode("EXAM_REMIND", targetDate, index)
+            val notifyId = buildRequestCode("EXAM_NOTIFY", targetDate, index)
+            val seatText = exam.seatNo?.takeIf { it.isNotBlank() }
+                ?.let { context.getString(R.string.exam_seat_number_format, it) }
+                .orEmpty()
+            val positionText = listOf(exam.displayPosition, seatText)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+
+            val intent = Intent(context, CourseAlarmReceiver::class.java).apply {
+                putExtra(CourseAlarmReceiver.EXTRA_COURSE_NAME, exam.courseName)
+                putExtra(CourseAlarmReceiver.EXTRA_COURSE_POSITION, positionText)
+                putExtra(CourseAlarmReceiver.EXTRA_NOTIFICATION_ID, notifyId)
+                putExtra(CourseAlarmReceiver.EXTRA_IS_EXAM, true)
+                putExtra(CourseAlarmReceiver.EXTRA_DATE, dateStr)
+            }
+            setExactAlarm(alarmManager, triggerMillis, createPendingIntent(reqCode, intent))
+        }
+    }
+
+    // 解析考试起始时刻
+    private fun parseExamTime(text: String?): LocalTime? {
+        if (text.isNullOrBlank()) return null
+        return runCatching { LocalTime.parse(text) }.getOrNull()
     }
 
     // 注册单门课程的课前提醒闹钟

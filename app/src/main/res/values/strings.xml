@@ -48,15 +48,16 @@
 
     <!-- 周次选择抽屉 -->
     <string name="week_selector_title">选择教学周次</string>
-    <string name="week_selector_current_with_count">本周 · %1$d节</string>
+    <string name="week_selector_current_with_count">本周 · %1$d项</string>
     <string name="week_selector_current_only">本周</string>
-    <string name="week_selector_count_format">%1$d 节课</string>
+    <string name="week_selector_count_format">%1$d 项</string>
     <string name="week_selector_no_course">无课程</string>
     <string name="week_selector_week_format">第 %1$d 周</string>
 
     <!-- 课程详情弹窗抽屉 -->
     <string name="course_sheet_title_format">课程详情 (%1$d/%2$d)</string>
     <string name="course_sheet_title_single">课程详情</string>
+    <string name="cell_detail_title_format">详情 (%1$d/%2$d)</string>
     <string name="course_sheet_label_location">上课地点</string>
     <string name="course_sheet_label_weeks">行课周次</string>
     <string name="course_sheet_label_teacher">任课教师</string>
@@ -236,6 +237,15 @@
     <string name="exam_datetime_format">%1$s %2$s %3$s-%4$s</string>
     <string name="exam_seat_number_format">%1$s号座位</string>
     <string name="exam_week_format">第%1$d周</string>
+    <string name="schedule_exam_badge">考试</string>
+    <string name="exam_detail_title">考试详情</string>
+    <string name="exam_detail_title_format">考试详情 (%1$d/%2$d)</string>
+    <string name="exam_detail_label_time">考试时间</string>
+    <string name="exam_detail_label_location">考试地点</string>
+    <string name="exam_detail_label_seat">座位号</string>
+    <string name="exam_detail_label_status">考试情况</string>
+    <string name="exam_detail_label_remark">备注</string>
+    <string name="exam_detail_pending_arrange">待公布</string>
 
     <!-- 小组件 -->
     <string name="widget_schedule_name">课程表</string>
@@ -259,6 +269,7 @@
     <string name="notification_location_format">地点: %1$s</string>
     <string name="notification_teacher_format">教师: %1$s</string>
     <string name="notification_class_starting">即将开始上课</string>
+    <string name="notification_exam_status">准备考试</string>
 
     <!-- 个性化设置子页面 -->
     <string name="personalization_title">个性化设置</string>
@@ -311,6 +322,8 @@
     <string name="course_edit_hint_move_valid">目标时段为空闲，可安全移动</string>
     <string name="course_edit_hint_move_invalid">目标时段已有课程《%1$s》，不能移动！请切换为「调换」或更改目标时段</string>
     <string name="course_edit_hint_swap_valid">将与《%1$s》（%2$s 第%3$d-%4$d节 @%5$s）互换时段</string>
+    <string name="course_edit_hint_exam_conflict">该时段有考试安排：%1$s，无法调课</string>
+    <string name="course_edit_hint_exam_conflict_source">原时段有考试安排：%1$s，无法调换</string>
     <string name="course_edit_hint_swap_invalid">目标时段暂无课程，无法调换！若想排入空闲时段请选择「移动」</string>
     <string name="course_edit_hint_swap_span_mismatch">两门课程节次长度不一致（%1$d节 vs %2$d节），无法直接调换</string>
     <string name="course_edit_hint_delete">标记删除（%1$s 第%2$d-%3$d节）,不影响其他课</string>

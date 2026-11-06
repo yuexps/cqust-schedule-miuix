@@ -106,11 +106,13 @@ fun CourseDetailHeader(
     }
 }
 
-// 教室位置及地图跳转卡片
+// 地点展示与地图跳转卡片
 @Composable
-fun CourseDetailLocationCard(
-    event: CourseEventWithMeta,
-    courseThemeColor: Color,
+fun DetailLocationCard(
+    label: String,
+    locationText: String,
+    rawPosition: String,
+    accentColor: Color,
     onOpenMap: (String) -> Unit
 ) {
     Box(
@@ -133,12 +135,12 @@ fun CourseDetailLocationCard(
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.course_sheet_label_location),
+                    text = label,
                     style = MiuixTheme.textStyles.footnote2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                 )
                 Text(
-                    text = event.displayLocation.ifBlank { stringResource(R.string.course_pending_location) },
+                    text = locationText.ifBlank { stringResource(R.string.course_pending_location) },
                     style = MiuixTheme.textStyles.title3.copy(fontWeight = FontWeight.Bold),
                     color = MiuixTheme.colorScheme.onSurface,
                     maxLines = 2,
@@ -149,10 +151,8 @@ fun CourseDetailLocationCard(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(courseThemeColor)
-                    .clickable {
-                        onOpenMap(event.location)
-                    },
+                    .background(accentColor)
+                    .clickable { onOpenMap(rawPosition) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

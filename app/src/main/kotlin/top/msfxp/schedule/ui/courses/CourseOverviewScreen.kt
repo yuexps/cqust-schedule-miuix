@@ -495,6 +495,7 @@ private fun CourseExamSection(
 ) {
     if (exams.isEmpty()) return
     val sharedMode = exams.map { it.examMode }.distinct().singleOrNull()
+    val sharedType = exams.map { it.examType }.filter { it.isNotBlank() }.distinct().singleOrNull()
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -505,7 +506,7 @@ private fun CourseExamSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.course_overview_section_exam),
+                text = sharedType ?: stringResource(R.string.course_overview_section_exam),
                 style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.Bold),
                 color = MiuixTheme.colorScheme.onSurface
             )
@@ -673,8 +674,7 @@ private fun ExamDetailLine(exam: ExamRecord) {
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            text = exam.position?.takeIf { it.isNotBlank() }
-                ?: stringResource(R.string.course_pending_location),
+            text = exam.displayPosition.ifBlank { stringResource(R.string.course_pending_location) },
             style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
             color = MiuixTheme.colorScheme.onSurface
         )

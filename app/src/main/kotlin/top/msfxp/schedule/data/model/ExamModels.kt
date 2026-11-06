@@ -3,7 +3,11 @@ package top.msfxp.schedule.data.model
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import top.msfxp.schedule.util.CourseLocationFormatter
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 
 // 考试批次与形式常量
 const val EXAM_TYPE_FINAL = "期末考试"
@@ -74,6 +78,10 @@ data class ExamRecord(
     val canSyncCalendar: Boolean
         get() = isScheduled && !position.isNullOrBlank()
 
+    // 规范化展示地点
+    val displayPosition: String
+        get() = position?.let { CourseLocationFormatter.formatDisplay(it) }.orEmpty()
+
     // 安全解析考试日期
     val examDateValue: LocalDate?
         get() = examDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
@@ -84,7 +92,28 @@ data class ExamRecord(
             val date = examDateValue ?: return false
             return weekday != null && date.dayOfWeek.value != weekday
         }
+
+    // 优先按考试日期推算星期，缺失时使用教务解析值
+    val resolvedWeekday: Int?
+        get() = examDateValue?.dayOfWeek?.value ?: weekday
+
+    // 按学期开学日期推算所属周次，日期缺失时使用教务解析值
+    fun resolveWeek(semesterStart: LocalDate): Int? {
+        val date = examDateValue ?: return week
+        val startMonday = semesterStart.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val examMonday = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        return (ChronoUnit.DAYS.between(startMonday, examMonday) / 7 + 1).toInt()
+    }
 }
+
+// 考试课表栅格块
+data class ExamGridBlock(
+    val week: Int,
+    val day: Int,
+    val startSection: Int,
+    val endSection: Int,
+    val exam: ExamRecord
+)
 
 // 教务考试抓取结果
 data class ExamFetchResult(
@@ -94,12 +123,13 @@ data class ExamFetchResult(
     val isSessionExpired: Boolean = false
 )
 
-// 构造考试记录稳定主键
+// 构造考试记录主键（按课程统一标识）
 fun buildExamRecordId(tableId: String, semesterId: String, item: RawExamItem): String {
+    val unifiedCode = courseUnifiedCode(item.courseCode)
     val key = if (item.isScheduled) {
-        "${item.courseCode}|${item.examDate}|${item.startTime}"
+        "$unifiedCode|${item.examDate}|${item.startTime}"
     } else {
-        "${item.courseCode}|${item.sequence}"
+        "$unifiedCode|${item.sequence}"
     }
     return "$tableId|$semesterId|$key"
 }

@@ -35,14 +35,14 @@
 - [CqustEamsParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustEamsParser.kt)：常规理论课表与未排课 HTML 解析器（提取课程、节次、教师与教室）。
 - [CqustPracticalParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustPracticalParser.kt)：实验/集中实践教学环节课表 HTML 解析器。
 - [CqustExamParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustExamParser.kt)：期末考试 HTML 解析器（笔试与非标行识别、时间与日期解析）。
-- [ScheduleMatrixBuilder.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/ScheduleMatrixBuilder.kt)：时空原子矩阵构建器，处理单双周展开、时间冲突聚合与地点纠偏。
+- [ScheduleMatrixBuilder.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/ScheduleMatrixBuilder.kt)：时空原子矩阵构建器，按课程统一标识生成课程 ID 与理论/实践配对，处理单双周展开与地点规范化。
 - [CqustSyncManager.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustSyncManager.kt)：全流程课表同步协调器（含 AndroidKeyStore AES-GCM 凭证安全加解密）。
 
 ---
 
 ### 2.3 数据持久化与模型层 (`data/db`, `data/model`, `data/repository`)
 - [data/db/ScheduleDao.kt](../app/src/main/kotlin/top/msfxp/schedule/data/db/ScheduleDao.kt)：Room 数据库实例与全量 DAO（课程、课表事件、调课记录、考试记录的 CRUD 与事务批量写入）。
-- [data/model/CourseModels.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/CourseModels.kt)：课程实体、排课原子事件、调课变动记录及主题调色板数据模型。
+- [data/model/CourseModels.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/CourseModels.kt)：课程实体、排课原子事件、调课变动记录及主题调色板数据模型；`courseUnifiedCode` 定义课程统一标识（课程序号去除教学班号后缀），供课程 ID、理论/实践配对、考试归属与总览分组复用。
 - [data/model/AppSettings.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/AppSettings.kt)：应用偏好设置模型、学期/周次日期推算工具及 DataStore 键。
 - [data/model/ExamModels.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/ExamModels.kt)：考试原始条目、Room 实体与笔试/非标派生属性。
 - [data/repository/ScheduleRepository.kt](../app/src/main/kotlin/top/msfxp/schedule/data/repository/ScheduleRepository.kt)：课表统一数据仓库，提供响应式 Flow 查询、调课持久化与颜色更新。
@@ -56,9 +56,9 @@
 - [service/CalendarSyncHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CalendarSyncHelper.kt)：系统日历账户创建、精细化增量更新（Diff Sync）与提醒去重自愈。
 - [service/CourseAlarmObserver.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CourseAlarmObserver.kt)：课表自动化监听器，分流解耦处理免打扰排程、小组件刷新及课程数据变动时的日历同步。
 - [service/CourseAlarmReceiver.kt](../app/src/main/kotlin/top/msfxp/schedule/service/CourseAlarmReceiver.kt)：课前提醒通知推送与上课自动免打扰/静音切换广播接收器。
-- [service/DndSchedulerWorker.kt](../app/src/main/kotlin/top/msfxp/schedule/service/DndSchedulerWorker.kt)：WorkManager 定时后台任务，每日自动对齐注册课堂免打扰排程。
+- [service/DndSchedulerWorker.kt](../app/src/main/kotlin/top/msfxp/schedule/service/DndSchedulerWorker.kt)：WorkManager 定时后台任务，每日自动对齐注册课堂免打扰与课程/考试提醒排程。
 - [widget/WidgetProviders.kt](../app/src/main/kotlin/top/msfxp/schedule/widget/WidgetProviders.kt)：桌面小组件 AppWidgetProvider 与即时广播接收器。
-- [widget/WidgetUpdateHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/widget/WidgetUpdateHelper.kt)：桌面小组件 RemoteViews 数据组装、Miuix 圆角卡片渲染与桌面刷新。
+- [widget/WidgetUpdateHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/widget/WidgetUpdateHelper.kt)：桌面小组件 RemoteViews 数据组装、Miuix 圆角卡片渲染与桌面刷新（今日课程与考试统一排程展示）。
 
 ---
 
@@ -67,9 +67,10 @@
 #### A. 主课表 (`ui/schedule`)
 - [WeeklyScheduleScreen.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/WeeklyScheduleScreen.kt)：周课表主界面（顶部操作栏、周次联动 Pager、主网格）。
 - [WeeklyScheduleViewModel.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/WeeklyScheduleViewModel.kt)：主课表状态驱动（当前周计算、调课事务触发、壁纸缓存加载）。
-- [components/ScheduleGrid.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/ScheduleGrid.kt)：核心课表格子画布（节次时间轴、课程卡片、重叠标记与点击事件）。
-- [components/CourseDetailSheet.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/CourseDetailSheet.kt)：课程详情底部弹窗，提供基本信息、地点导航与调课入口。
+- [components/ScheduleGrid.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/ScheduleGrid.kt)：核心课表格子画布（节次时间轴、课程/实践/考试统一单元格卡片、同格叠加标记与点击事件）。
+- [components/CellDetailSheet.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/CellDetailSheet.kt)：课表单元详情底部弹窗，同格考试/课程/实践统一分页左右滑动，含地点导航与调课入口。
 - [components/CourseDetailSubComponents.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/CourseDetailSubComponents.kt)：课程详情辅助子组件（属性标签行、地点导航操作条）。
+- [components/ExamDetailPage.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/ExamDetailPage.kt)：考试详情页内容（考试类型、日期、时间、地点座位与属性网格），供单元详情弹窗复用。
 - [components/CourseEditSheet.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/CourseEditSheet.kt)：课程编辑总控弹窗，协调调色板、单次调课与调课历史子弹窗。
 - [components/CoursePaletteSubSheet.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/CoursePaletteSubSheet.kt)：课程配色编号（Palette Index）选择弹窗。
 - [components/CourseAdjustmentSubSheet.kt](../app/src/main/kotlin/top/msfxp/schedule/ui/schedule/components/CourseAdjustmentSubSheet.kt)：调课操作表单（改期/改节次/停课/与目标课程交换）。
@@ -106,6 +107,7 @@
 - [data/api/UpdateCheckService.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/UpdateCheckService.kt)：GitHub Release 检查更新网络服务与语义化版本比对器。
 - [AppActionHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/AppActionHelper.kt)：手Q加群唤起、剪贴板复制及浏览器链接调起工具。
 - [CourseLocationFormatter.kt](../app/src/main/kotlin/top/msfxp/schedule/util/CourseLocationFormatter.kt)：课程地点解析与规范化工具（校区、字母楼栋、教室拆分与统一展示）。
+- [ExamTimeMapper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/ExamTimeMapper.kt)：考试起止时刻映射课表节次区间。
 - [ImageBitmapHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/ImageBitmapHelper.kt)：壁纸位图高保真采样缩放、旋转纠偏与文件安全落地。
 - [MapNavigationHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/MapNavigationHelper.kt)：检测已安装地图应用并生成各厂商步行导航调起 URI。
 - [PermissionHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/PermissionHelper.kt)：系统权限授权状态判断及设置页跳转意图构建。

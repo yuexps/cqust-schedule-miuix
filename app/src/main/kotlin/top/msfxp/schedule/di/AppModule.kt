@@ -51,7 +51,7 @@ val appModule = module {
     }
 
     // ViewModel 视图模型
-    viewModel { WeeklyScheduleViewModel(androidContext(), get(), get(), get()) }
+    viewModel { WeeklyScheduleViewModel(androidContext(), get(), get(), get(), get()) }
     viewModel { SettingsViewModel(androidContext(), get(), get(), get(), get()) }
     viewModel { CqustLoginViewModel(androidContext(), get(), get()) }
     viewModel { CourseOverviewViewModel(get(), get(), get()) }

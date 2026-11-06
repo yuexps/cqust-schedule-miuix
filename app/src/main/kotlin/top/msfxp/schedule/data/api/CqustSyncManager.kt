@@ -14,10 +14,13 @@ import top.msfxp.schedule.data.model.RawExamItem
 import top.msfxp.schedule.data.model.Semester
 import top.msfxp.schedule.data.model.StudentProfile
 import top.msfxp.schedule.data.model.buildExamRecordId
+import top.msfxp.schedule.data.model.courseUnifiedCode
 import top.msfxp.schedule.data.model.effectiveStartDate
+import top.msfxp.schedule.data.model.unifiedCode
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
+import top.msfxp.schedule.util.CourseLocationFormatter
 
 // 同步结果统计数据模型
 data class SyncResultSummary(
@@ -190,7 +193,7 @@ class CqustSyncManager(
                 weekday = item.weekday,
                 startTime = item.startTime,
                 endTime = item.endTime,
-                position = item.position,
+                position = item.position?.let { CourseLocationFormatter.format(it) },
                 seatNo = item.seatNo,
                 status = item.status,
                 remark = item.remark,
@@ -202,17 +205,17 @@ class CqustSyncManager(
         return records.size
     }
 
-    // 按课程代码与名称匹配考试所属课程
+    // 按课程统一标识匹配考试所属课程
     private fun matchCourseId(item: RawExamItem, courses: List<Course>): String? {
-        val theory = courses.filter { it.courseType == COURSE_TYPE_THEORY }
-        val practical = courses.filter { it.courseType == COURSE_TYPE_PRACTICAL }
-        val baseCode = item.courseCode.substringBefore('.').trim()
-
-        theory.firstOrNull { it.courseCode == item.courseCode }?.let { return it.id }
-        theory.firstOrNull { it.courseCode.substringBefore('.').trim() == baseCode }?.let { return it.id }
-        practical.firstOrNull { it.courseCode == item.courseCode }?.let { return it.id }
-        return (theory.firstOrNull { it.name == item.courseName }
-            ?: practical.firstOrNull { it.name == item.courseName })?.id
+        val unifiedCode = courseUnifiedCode(item.courseCode)
+        return courses
+            .filter { it.courseType == COURSE_TYPE_THEORY }
+            .firstOrNull { it.unifiedCode == unifiedCode }
+            ?.id
+            ?: courses
+                .filter { it.courseType == COURSE_TYPE_PRACTICAL }
+                .firstOrNull { it.unifiedCode == unifiedCode }
+                ?.id
     }
 
     // 保存学期列表至本地数据库

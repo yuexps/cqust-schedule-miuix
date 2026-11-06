@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import top.msfxp.schedule.R
 import top.msfxp.schedule.data.model.CourseAdjustment
 import top.msfxp.schedule.data.model.CourseEventWithMeta
+import top.msfxp.schedule.data.model.ExamRecord
 import top.msfxp.schedule.util.CourseLocationFormatter
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
@@ -42,6 +43,7 @@ fun CourseAdjustmentSubSheet(
     currentSemesterId: String = "",
     existingAdjustment: CourseAdjustment?,
     getCourseAtSlot: (week: Int, day: Int, startSection: Int, endSection: Int) -> CourseEventWithMeta?,
+    getExamAtSlot: (week: Int, day: Int, startSection: Int, endSection: Int) -> ExamRecord? = { _, _, _, _ -> null },
     onMoveCourse: (CourseAdjustment) -> Unit,
     onSwapCourses: (CourseAdjustment, CourseAdjustment) -> Unit,
     onMarkDeleted: (CourseAdjustment) -> Unit,
@@ -110,6 +112,18 @@ fun CourseAdjustmentSubSheet(
         }
     }
 
+    // 目标时段存在考试安排时禁止调课
+    val targetExamConflict = remember(targetWeek, targetDay, targetStartSection, targetEndSection, isSlotChanged) {
+        if (!isSlotChanged) null
+        else getExamAtSlot(targetWeek, targetDay, targetStartSection, targetEndSection)
+    }
+
+    // 调换时对方课程移入原时段，需校验原时段考试冲突
+    val sourceExamConflict = remember(targetWeek, mode, targetConflictCourse) {
+        if (mode != CourseAdjustmentMode.SWAP || targetConflictCourse == null) null
+        else getExamAtSlot(targetWeek, event.day, event.startSection, event.endSection)
+    }
+
     val isSpanMatched = targetConflictCourse == null ||
             (targetConflictCourse.endSection - targetConflictCourse.startSection) == (event.endSection - event.startSection)
 
@@ -155,8 +169,11 @@ fun CourseAdjustmentSubSheet(
     val targetDayStr = if (targetDay in 1..7) dayNames[targetDay - 1] else stringResource(R.string.course_pending_location)
 
     val isConfirmEnabled = when (mode) {
-        CourseAdjustmentMode.MOVE -> isDataChanged && (!isSlotChanged || targetConflictCourse == null)
-        CourseAdjustmentMode.SWAP -> isSlotChanged && targetConflictCourse != null && isSpanMatched
+        CourseAdjustmentMode.MOVE ->
+            isDataChanged && (!isSlotChanged || (targetConflictCourse == null && targetExamConflict == null))
+        CourseAdjustmentMode.SWAP ->
+            isSlotChanged && targetConflictCourse != null &&
+                targetExamConflict == null && sourceExamConflict == null && isSpanMatched
         CourseAdjustmentMode.DELETE -> true
     }
 
@@ -524,7 +541,14 @@ fun CourseAdjustmentSubSheet(
                     // 状态提示条
                     if (mode == CourseAdjustmentMode.MOVE) {
                         if (isSlotChanged) {
-                            if (targetConflictCourse != null) {
+                            if (targetExamConflict != null) {
+                                ExamConflictNotice(
+                                    stringResource(
+                                        R.string.course_edit_hint_exam_conflict,
+                                        targetExamConflict.courseName
+                                    )
+                                )
+                            } else if (targetConflictCourse != null) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -558,7 +582,21 @@ fun CourseAdjustmentSubSheet(
                         }
                     } else if (mode == CourseAdjustmentMode.SWAP) {
                         if (isSlotChanged) {
-                            if (targetConflictCourse != null) {
+                            if (targetExamConflict != null) {
+                                ExamConflictNotice(
+                                    stringResource(
+                                        R.string.course_edit_hint_exam_conflict,
+                                        targetExamConflict.courseName
+                                    )
+                                )
+                            } else if (sourceExamConflict != null) {
+                                ExamConflictNotice(
+                                    stringResource(
+                                        R.string.course_edit_hint_exam_conflict_source,
+                                        sourceExamConflict.courseName
+                                    )
+                                )
+                            } else if (targetConflictCourse != null) {
                                 if (!isSpanMatched) {
                                     Box(
                                         modifier = Modifier
@@ -657,6 +695,26 @@ fun CourseAdjustmentSubSheet(
                 }
             }
         }
+    }
+}
+
+// 考试冲突提示条
+@Composable
+private fun ExamConflictNotice(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MiuixTheme.colorScheme.error.copy(alpha = 0.12f))
+            .padding(12.dp)
+    ) {
+        Text(
+            text = text,
+            style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
+            color = MiuixTheme.colorScheme.error,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
