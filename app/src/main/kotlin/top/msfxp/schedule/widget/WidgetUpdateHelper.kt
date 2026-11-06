@@ -97,7 +97,7 @@ fun renderScheduleWidget(
     val first = activeCourses[0]
     views.setTextViewText(R.id.tv_name_1, first.event.courseName)
 
-    val room1 = first.event.location.trim()
+    val room1 = first.event.displayLocation.trim()
     val teacher1 = first.event.teacher.trim()
     val roomTeacher1 = listOf(room1, teacher1).filter { it.isNotBlank() }.joinToString(" ")
     views.setTextViewText(R.id.tv_room_teacher_1, roomTeacher1.ifBlank { "--" })
@@ -112,7 +112,7 @@ fun renderScheduleWidget(
         views.setViewVisibility(R.id.row_course_2, View.VISIBLE)
         views.setTextViewText(R.id.tv_name_2, second.event.courseName)
 
-        val room2 = second.event.location.trim()
+        val room2 = second.event.displayLocation.trim()
         val timeRoom2 = listOf(second.startTime, room2).filter { it.isNotBlank() }.joinToString(" ")
         views.setTextViewText(R.id.tv_time_room_2, timeRoom2.ifBlank { second.startTime })
 

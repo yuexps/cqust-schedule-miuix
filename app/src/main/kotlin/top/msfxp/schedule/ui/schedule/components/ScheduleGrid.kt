@@ -363,9 +363,9 @@ private fun ScheduleCourseBlockItem(
             }
 
             Column(modifier = Modifier.fillMaxWidth()) {
-                if (primary.location.isNotBlank()) {
+                if (primary.displayLocation.isNotBlank()) {
                     Text(
-                        text = primary.location,
+                        text = primary.displayLocation,
                         style = MiuixTheme.textStyles.footnote2.copy(fontSize = 9.sp, lineHeight = 11.5.sp),
                         color = Color.White.copy(alpha = 0.95f),
                         maxLines = 2,

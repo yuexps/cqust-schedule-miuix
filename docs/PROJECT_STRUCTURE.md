@@ -105,6 +105,7 @@
 ### 2.6 通用工具与扩展层 (`util`, `data/api`)
 - [data/api/UpdateCheckService.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/UpdateCheckService.kt)：GitHub Release 检查更新网络服务与语义化版本比对器。
 - [AppActionHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/AppActionHelper.kt)：手Q加群唤起、剪贴板复制及浏览器链接调起工具。
+- [CourseLocationFormatter.kt](../app/src/main/kotlin/top/msfxp/schedule/util/CourseLocationFormatter.kt)：课程地点解析与规范化工具（校区、字母楼栋、教室拆分与统一展示）。
 - [ImageBitmapHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/ImageBitmapHelper.kt)：壁纸位图高保真采样缩放、旋转纠偏与文件安全落地。
 - [MapNavigationHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/MapNavigationHelper.kt)：检测已安装地图应用并生成各厂商步行导航调起 URI。
 - [PermissionHelper.kt](../app/src/main/kotlin/top/msfxp/schedule/util/PermissionHelper.kt)：系统权限授权状态判断及设置页跳转意图构建。

@@ -453,7 +453,7 @@ private fun CourseSlotListBlock(
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                         )
                         Text(
-                            text = slotItem.location.ifBlank { stringResource(R.string.course_pending_location) },
+                            text = slotItem.displayLocation.ifBlank { stringResource(R.string.course_pending_location) },
                             style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
                             color = MiuixTheme.colorScheme.onSurface,
                             maxLines = 1,

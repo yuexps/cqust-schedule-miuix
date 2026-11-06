@@ -104,7 +104,7 @@ class CalendarSyncHelper(
                         val desc = descParts.joinToString("\n")
 
                         val teacher = ev.teacher.trim()
-                        val eventLocation = ev.location.trim()
+                        val eventLocation = ev.displayLocation.trim()
                         val location = when {
                             teacher.isBlank() -> eventLocation
                             eventLocation.isBlank() -> teacher

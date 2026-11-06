@@ -168,7 +168,7 @@ class DndSchedulerWorker(
         val notifyId = buildRequestCode("NOTIFY", targetDate, event.startSection)
         val intent = Intent(context, CourseAlarmReceiver::class.java).apply {
             putExtra(CourseAlarmReceiver.EXTRA_COURSE_NAME, event.inlineTitle)
-            putExtra(CourseAlarmReceiver.EXTRA_COURSE_POSITION, event.location)
+            putExtra(CourseAlarmReceiver.EXTRA_COURSE_POSITION, event.displayLocation)
             putExtra(CourseAlarmReceiver.EXTRA_COURSE_TEACHER, event.teacher)
             putExtra(CourseAlarmReceiver.EXTRA_NOTIFICATION_ID, notifyId)
             putExtra(CourseAlarmReceiver.EXTRA_SECTION, event.startSection)

@@ -8,6 +8,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 import kotlinx.serialization.Serializable
+import top.msfxp.schedule.util.CourseLocationFormatter
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -198,6 +199,9 @@ data class CourseEventWithMeta(
 
     val isPractical: Boolean get() = courseType == COURSE_TYPE_PRACTICAL
 
+    // 规范化展示地点
+    val displayLocation: String get() = CourseLocationFormatter.formatDisplay(location)
+
     // 网格展示标题
     val displayName: String
         get() = if (isPractical && projectName.isNotBlank()) {
@@ -297,7 +301,10 @@ data class CompressedCourseSlot(
     val weeks: List<Int>,
     val projectName: String = "",
     val studentCount: Int = 0
-)
+) {
+    // 规范化展示地点
+    val displayLocation: String get() = CourseLocationFormatter.formatDisplay(location)
+}
 
 // 课程栅格合并块模型
 data class MergedCourseBlock(

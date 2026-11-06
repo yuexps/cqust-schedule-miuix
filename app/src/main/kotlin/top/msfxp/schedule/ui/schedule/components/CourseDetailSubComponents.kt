@@ -111,8 +111,7 @@ fun CourseDetailHeader(
 fun CourseDetailLocationCard(
     event: CourseEventWithMeta,
     courseThemeColor: Color,
-    onOpenMap: (String) -> Unit,
-    onNoLocation: () -> Unit
+    onOpenMap: (String) -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -139,10 +138,10 @@ fun CourseDetailLocationCard(
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                 )
                 Text(
-                    text = event.location.ifBlank { stringResource(R.string.course_pending_location) },
+                    text = event.displayLocation.ifBlank { stringResource(R.string.course_pending_location) },
                     style = MiuixTheme.textStyles.title3.copy(fontWeight = FontWeight.Bold),
                     color = MiuixTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -152,11 +151,7 @@ fun CourseDetailLocationCard(
                     .clip(CircleShape)
                     .background(courseThemeColor)
                     .clickable {
-                        if (event.location.isNotBlank() && event.location != "待定") {
-                            onOpenMap(event.location)
-                        } else {
-                            onNoLocation()
-                        }
+                        onOpenMap(event.location)
                     },
                 contentAlignment = Alignment.Center
             ) {

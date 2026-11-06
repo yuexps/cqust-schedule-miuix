@@ -127,18 +127,17 @@ fun CourseDetailSheet(
                         event = event,
                         courseThemeColor = courseThemeColor,
                         onOpenMap = { loc ->
-                            val availableApps = MapNavigationHelper.getAvailableMapApps(context)
-                            when {
-                                availableApps.isEmpty() -> Toast.makeText(context, R.string.map_no_supported_app_toast, Toast.LENGTH_SHORT).show()
-                                availableApps.size == 1 -> {
-                                    val dest = MapNavigationHelper.buildWalkingDestination(loc)
-                                    MapNavigationHelper.openMapWalkingNavigation(context, availableApps.first(), dest)
+                            val destination = MapNavigationHelper.buildWalkingDestination(loc)
+                            if (destination == null) {
+                                Toast.makeText(context, R.string.map_no_location_toast, Toast.LENGTH_SHORT).show()
+                            } else {
+                                val availableApps = MapNavigationHelper.getAvailableMapApps(context)
+                                when {
+                                    availableApps.isEmpty() -> Toast.makeText(context, R.string.map_no_supported_app_toast, Toast.LENGTH_SHORT).show()
+                                    availableApps.size == 1 -> MapNavigationHelper.openMapWalkingNavigation(context, availableApps.first(), destination)
+                                    else -> selectedNavPosition = loc
                                 }
-                                else -> selectedNavPosition = loc
                             }
-                        },
-                        onNoLocation = {
-                            Toast.makeText(context, R.string.map_no_location_toast, Toast.LENGTH_SHORT).show()
                         }
                     )
                     CourseDetailPropertiesGrid(

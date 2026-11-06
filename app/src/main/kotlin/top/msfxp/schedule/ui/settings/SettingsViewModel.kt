@@ -16,6 +16,7 @@ import top.msfxp.schedule.data.model.Semester
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import top.msfxp.schedule.service.CalendarSyncHelper
+import top.msfxp.schedule.util.CourseLocationFormatter
 
 // 设置界面状态
 data class SettingsUiState(
@@ -385,7 +386,8 @@ class SettingsViewModel(
         val first = courses.firstOrNull()
         val firstEvent = first?.events?.firstOrNull()
         val name = first?.course?.name ?: context.getString(top.msfxp.schedule.R.string.test_course_default_name)
-        val position = firstEvent?.location ?: context.getString(top.msfxp.schedule.R.string.test_course_default_location)
+        val position = firstEvent?.location?.let { CourseLocationFormatter.formatDisplay(it) }
+            ?: context.getString(top.msfxp.schedule.R.string.test_course_default_location)
         val teacher = firstEvent?.teacher ?: context.getString(top.msfxp.schedule.R.string.test_course_default_teacher)
         return Triple(name, position, teacher)
     }

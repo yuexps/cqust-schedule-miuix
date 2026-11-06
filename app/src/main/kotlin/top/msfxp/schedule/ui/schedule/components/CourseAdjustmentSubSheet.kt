@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import top.msfxp.schedule.R
 import top.msfxp.schedule.data.model.CourseAdjustment
 import top.msfxp.schedule.data.model.CourseEventWithMeta
+import top.msfxp.schedule.util.CourseLocationFormatter
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
@@ -68,15 +69,20 @@ fun CourseAdjustmentSubSheet(
         mutableIntStateOf(existingAdjustment?.targetEndSection ?: if (event.endSection > 0) event.endSection else 2)
     }
     var targetLocation by remember(existingAdjustment, event.location) {
-        mutableStateOf(existingAdjustment?.targetLocation ?: event.location)
+        mutableStateOf(
+            existingAdjustment?.targetLocation?.let { CourseLocationFormatter.formatDisplay(it) }
+                ?: event.displayLocation
+        )
     }
 
     // 数据变更检测
+    val normalizedTargetLocation = CourseLocationFormatter.formatDisplay(targetLocation)
+    val normalizedEventLocation = event.displayLocation
     val isSlotChanged = targetWeek != currentWeek ||
             targetDay != event.day ||
             targetStartSection != event.startSection ||
             targetEndSection != event.endSection
-    val isLocationChanged = targetLocation.trim() != event.location.trim()
+    val isLocationChanged = normalizedTargetLocation.trim() != normalizedEventLocation.trim()
 
     val isSameAsOriginal = !isSlotChanged && !isLocationChanged
 
@@ -85,7 +91,8 @@ fun CourseAdjustmentSubSheet(
             targetDay == existingAdjustment.targetDay &&
             targetStartSection == existingAdjustment.targetStartSection &&
             targetEndSection == existingAdjustment.targetEndSection &&
-            targetLocation.trim() == existingAdjustment.targetLocation.trim()
+            normalizedTargetLocation.trim() ==
+            CourseLocationFormatter.formatDisplay(existingAdjustment.targetLocation).trim()
 
     val isDataChanged = !isSameAsOriginal && !isSameAsExisting
 
@@ -153,7 +160,8 @@ fun CourseAdjustmentSubSheet(
         CourseAdjustmentMode.DELETE -> true
     }
 
-    val origLoc = existingAdjustment?.originalLocation?.ifBlank { event.location } ?: event.location
+    val origLoc = existingAdjustment?.originalLocation?.let { CourseLocationFormatter.formatDisplay(it) }
+        ?.ifBlank { normalizedEventLocation } ?: normalizedEventLocation
 
     WindowBottomSheet(
         show = true,
@@ -187,7 +195,7 @@ fun CourseAdjustmentSubSheet(
                                 targetDay = targetDay,
                                 targetStartSection = targetStartSection,
                                 targetEndSection = targetEndSection,
-                                targetLocation = targetLocation.trim(),
+                                targetLocation = normalizedTargetLocation,
                                 isSuspended = false
                             )
                             onMoveCourse(adj)
@@ -208,7 +216,7 @@ fun CourseAdjustmentSubSheet(
                                 targetDay = conflict.day,
                                 targetStartSection = conflict.startSection,
                                 targetEndSection = conflict.endSection,
-                                targetLocation = if (targetLocation.isNotBlank()) targetLocation.trim() else conflict.location,
+                                targetLocation = normalizedTargetLocation.ifBlank { conflict.displayLocation },
                                 isSuspended = false
                             )
                             val adjB = CourseAdjustment(
@@ -220,12 +228,12 @@ fun CourseAdjustmentSubSheet(
                                 originalDay = conflict.day,
                                 originalStartSection = conflict.startSection,
                                 originalEndSection = conflict.endSection,
-                                originalLocation = conflict.location,
+                                originalLocation = conflict.displayLocation,
                                 targetWeek = currentWeek,
                                 targetDay = event.day,
                                 targetStartSection = event.startSection,
                                 targetEndSection = event.endSection,
-                                targetLocation = event.location,
+                                targetLocation = event.displayLocation,
                                 isSuspended = false
                             )
                             onSwapCourses(adjA, adjB)
@@ -245,7 +253,7 @@ fun CourseAdjustmentSubSheet(
                                 targetDay = event.day,
                                 targetStartSection = event.startSection,
                                 targetEndSection = event.endSection,
-                                targetLocation = event.location,
+                                targetLocation = event.displayLocation,
                                 isSuspended = true
                             )
                             onMarkDeleted(adj)
@@ -311,7 +319,7 @@ fun CourseAdjustmentSubSheet(
                             origDayStr,
                             event.startSection,
                             event.endSection
-                        ) + " · ${event.location.ifBlank { stringResource(R.string.course_pending_location) }}",
+                        ) + " · ${event.displayLocation.ifBlank { stringResource(R.string.course_pending_location) }}",
                         style = MiuixTheme.textStyles.footnote2,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         maxLines = 1,
@@ -584,7 +592,7 @@ fun CourseAdjustmentSubSheet(
                                                 targetDayStr,
                                                 targetConflictCourse.startSection,
                                                 targetConflictCourse.endSection,
-                                                targetConflictCourse.location.ifBlank { stringResource(R.string.course_pending_location) }
+                                                targetConflictCourse.displayLocation.ifBlank { stringResource(R.string.course_pending_location) }
                                             ),
                                             style = MiuixTheme.textStyles.footnote2.copy(fontWeight = FontWeight.SemiBold),
                                             color = MiuixTheme.colorScheme.primary,
