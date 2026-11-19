@@ -15,10 +15,12 @@ import androidx.core.content.getSystemService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import top.msfxp.schedule.R
 import top.msfxp.schedule.data.model.AutoControlMode
 import top.msfxp.schedule.widget.updateAllAppWidgets
+import java.util.concurrent.atomic.AtomicInteger
 
 // 课程自动化音频模式切换短期前台服务（用于 Android 14+ / 17 后台音频强化提权）
 class AudioModeControlService : Service() {
@@ -53,6 +55,9 @@ class AudioModeControlService : Service() {
         }
     }
 
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val activeTasks = AtomicInteger(0)
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -81,7 +86,7 @@ class AudioModeControlService : Service() {
         val modeStr = intent?.getStringExtra(EXTRA_MODE_TYPE)
         val mode = AutoControlMode.fromString(modeStr)
 
-        val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        activeTasks.incrementAndGet()
         serviceScope.launch {
             try {
                 CourseAlarmReceiver.toggleMode(this@AudioModeControlService, isEnabled, mode)
@@ -89,16 +94,23 @@ class AudioModeControlService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "Execute toggleMode in foreground service failed", e)
             } finally {
-                try {
-                    ServiceCompat.stopForeground(this@AudioModeControlService, ServiceCompat.STOP_FOREGROUND_REMOVE)
-                } catch (e: Exception) {
-                    Log.w(TAG, "stopForeground in finally failed: ${e.message}")
+                if (activeTasks.decrementAndGet() <= 0) {
+                    try {
+                        ServiceCompat.stopForeground(this@AudioModeControlService, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "stopForeground in finally failed: ${e.message}")
+                    }
+                    stopSelf(startId)
                 }
-                stopSelf(startId)
             }
         }
 
         return START_NOT_STICKY
+    }
+
+    override fun onDestroy() {
+        serviceScope.cancel()
+        super.onDestroy()
     }
 
     override fun onTimeout(startId: Int) {

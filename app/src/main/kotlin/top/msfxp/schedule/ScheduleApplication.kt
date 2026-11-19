@@ -13,13 +13,14 @@ class ScheduleApplication : Application() {
         super.onCreate()
 
         startKoin {
-            androidLogger()
+            if (BuildConfig.DEBUG) {
+                androidLogger()
+            }
             androidContext(this@ScheduleApplication)
             modules(appModule)
         }
 
-        // 初始化免打扰与闹钟每日调度及即时刷新
+        // 注册免打扰与闹钟每日周期调度
         DndSchedulerWorker.enqueuePeriodicWork(this)
-        DndSchedulerWorker.triggerImmediately(this)
     }
 }

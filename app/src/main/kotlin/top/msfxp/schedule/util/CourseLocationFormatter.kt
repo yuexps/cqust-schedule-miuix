@@ -89,7 +89,7 @@ object CourseLocationFormatter {
         return ParsedLocation(campus = campus, detail = remainder)
     }
 
-    // 规范化为“校区 楼栋 教室”存储文本（仅处理虎溪校区，其余保持原始内容）
+    // 规范化为“校区 楼栋 教室”文本（仅处理虎溪校区）
     fun format(raw: String): String {
         val trimmed = raw.trim()
         val parsed = parse(trimmed)

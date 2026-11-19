@@ -43,10 +43,8 @@ class SettingsViewModel(
 
     init {
         viewModelScope.launch {
-            val tableId = scheduleRepository.getOrCreateDefaultTableId()
-            scheduleRepository.getAllCoursesWithEvents(tableId).collect { list ->
-                val distinctCount = list.map { it.course.courseCode }.distinct().size
-                _uiState.update { it.copy(courseCount = distinctCount) }
+            scheduleRepository.allCoursesFlow.collect { list ->
+                _uiState.update { it.copy(courseCount = list.size) }
             }
         }
 
@@ -102,27 +100,35 @@ class SettingsViewModel(
         }
     }
 
-    // 切换当前激活学期并重新同步
+    // 切换当前激活学期（已有本地缓存则离线秒切，无缓存时联网同步）
     fun switchSemester(
         semesterId: String,
         onNeedLogin: () -> Unit,
         onSuccess: (() -> Unit)? = null
     ) {
-        val settings = _uiState.value.appSettings
-        if (!settings.isLoggedIn || settings.studentId.isBlank() || settings.passwordEncrypted.isBlank()) {
-            onNeedLogin()
-            return
-        }
-
-        _uiState.update {
-            it.copy(
-                isSyncing = true,
-                switchingSemesterId = semesterId,
-                syncMessage = null
-            )
-        }
-
         viewModelScope.launch {
+            val tableId = scheduleRepository.getOrCreateDefaultTableId()
+            val hasCache = scheduleRepository.hasCoursesForSemester(tableId, semesterId)
+            if (hasCache) {
+                scheduleRepository.setActiveSemester(semesterId)
+                onSuccess?.invoke()
+                return@launch
+            }
+
+            val settings = _uiState.value.appSettings
+            if (!settings.isLoggedIn || settings.studentId.isBlank() || settings.passwordEncrypted.isBlank()) {
+                onNeedLogin()
+                return@launch
+            }
+
+            _uiState.update {
+                it.copy(
+                    isSyncing = true,
+                    switchingSemesterId = semesterId,
+                    syncMessage = null
+                )
+            }
+
             try {
                 scheduleRepository.setActiveSemester(semesterId)
                 val rawPassword = LocalCrypto.decrypt(settings.passwordEncrypted)
@@ -170,7 +176,7 @@ class SettingsViewModel(
     fun logout(onSuccess: () -> Unit) {
         viewModelScope.launch {
             val tableId = scheduleRepository.getOrCreateDefaultTableId()
-            scheduleRepository.clearCourses(tableId)
+            scheduleRepository.clearAllCourses(tableId)
             scheduleRepository.clearSemesters()
             settingsRepository.logout()
             onSuccess()
@@ -273,8 +279,6 @@ class SettingsViewModel(
     // 发送立即测试提醒通知
     fun sendTestNotification(context: android.content.Context) {
         viewModelScope.launch {
-            val tableId = scheduleRepository.getOrCreateDefaultTableId()
-            val courses = scheduleRepository.getAllCoursesWithEventsOnce(tableId)
             val (name, position, teacher) = getTestCoursePayload(context)
             val testTitle = context.getString(top.msfxp.schedule.R.string.test_notification_title, name)
 
@@ -302,6 +306,7 @@ class SettingsViewModel(
                 putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_COURSE_POSITION, position)
                 putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_COURSE_TEACHER, teacher)
                 putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_NOTIFICATION_ID, TEST_NOTIFICATION_ID_DELAYED)
+                putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_IS_TEST, true)
             }
 
             val pi = android.app.PendingIntent.getBroadcast(
@@ -346,6 +351,7 @@ class SettingsViewModel(
 
             val startIntent = android.content.Intent(context, top.msfxp.schedule.service.CourseAlarmReceiver::class.java).apply {
                 putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_DND_ACTION, top.msfxp.schedule.service.CourseAlarmReceiver.DND_ACTION_START)
+                putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_IS_TEST, true)
             }
             val startPI = android.app.PendingIntent.getBroadcast(
                 context,
@@ -356,6 +362,7 @@ class SettingsViewModel(
 
             val endIntent = android.content.Intent(context, top.msfxp.schedule.service.CourseAlarmReceiver::class.java).apply {
                 putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_DND_ACTION, top.msfxp.schedule.service.CourseAlarmReceiver.DND_ACTION_END)
+                putExtra(top.msfxp.schedule.service.CourseAlarmReceiver.EXTRA_IS_TEST, true)
             }
             val endPI = android.app.PendingIntent.getBroadcast(
                 context,
@@ -382,7 +389,12 @@ class SettingsViewModel(
     // 获取测试用课程字段
     private suspend fun getTestCoursePayload(context: android.content.Context): Triple<String, String, String> {
         val tableId = scheduleRepository.getOrCreateDefaultTableId()
-        val courses = scheduleRepository.getAllCoursesWithEventsOnce(tableId)
+        val semesterId = scheduleRepository.getCurrentSemesterOnce()?.id.orEmpty()
+        val courses = if (semesterId.isNotBlank()) {
+            scheduleRepository.getAllCoursesWithEventsOnce(tableId, semesterId)
+        } else {
+            emptyList()
+        }
         val first = courses.firstOrNull()
         val firstEvent = first?.events?.firstOrNull()
         val name = first?.course?.name ?: context.getString(top.msfxp.schedule.R.string.test_course_default_name)

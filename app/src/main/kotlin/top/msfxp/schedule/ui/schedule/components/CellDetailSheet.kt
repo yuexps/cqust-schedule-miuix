@@ -61,7 +61,7 @@ fun CellDetailSheet(
     onMarkDeleted: (CourseAdjustment) -> Unit = {},
     onDeleteAdjustment: (Long) -> Unit = {},
     onClearAllAdjustments: () -> Unit = {},
-    onGetAdjustmentForEvent: (suspend (String, Int, Int, Int) -> CourseAdjustment?)? = null,
+    onGetAdjustmentForEvent: (suspend (String, String, Int, Int, Int) -> CourseAdjustment?)? = null,
     getCourseAtSlot: ((week: Int, day: Int, startSection: Int, endSection: Int, excludeCourseId: String, excludeStartSection: Int) -> CourseEventWithMeta?)? = null,
     onDismissRequest: () -> Unit
 ) {
@@ -86,6 +86,7 @@ fun CellDetailSheet(
         if (currentEvent != null && onGetAdjustmentForEvent != null) {
             currentAdjustment = onGetAdjustmentForEvent(
                 currentEvent.courseId,
+                currentEvent.courseType,
                 currentWeekNumber,
                 currentEvent.day,
                 currentEvent.startSection

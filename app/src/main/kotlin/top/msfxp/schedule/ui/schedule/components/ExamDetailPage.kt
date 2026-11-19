@@ -175,7 +175,7 @@ private fun ExamDetailPropertiesGrid(
             InfoGridItem(
                 label = stringResource(R.string.exam_detail_label_seat),
                 value = exam.seatNo?.takeIf { it.isNotBlank() }
-                    ?.let { stringResource(R.string.exam_seat_number_format, it) }
+                    ?.let { stringResource(R.string.exam_detail_seat_number_format, it) }
                     ?: stringResource(R.string.course_sheet_unspecified),
                 modifier = Modifier.weight(1f)
             )

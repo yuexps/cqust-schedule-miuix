@@ -22,7 +22,7 @@ import top.msfxp.schedule.data.model.SemesterDateHelper
 import top.msfxp.schedule.data.model.effectiveStartDate
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
-import top.msfxp.schedule.data.repository.applyAdjustmentsToWeekEvents
+import top.msfxp.schedule.domain.EffectiveScheduleResolver
 import top.msfxp.schedule.widget.updateAllAppWidgets
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
@@ -41,6 +41,7 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
         const val EXTRA_COURSE_TEACHER = "extra_course_teacher"
         const val EXTRA_NOTIFICATION_ID = "extra_notification_id"
         const val EXTRA_IS_EXAM = "extra_is_exam"
+        const val EXTRA_IS_TEST = "extra_is_test"
 
         const val EXTRA_SECTION = "extra_section"
         const val EXTRA_DATE = "extra_date"
@@ -53,28 +54,44 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
         private const val PREFS_AUTO_SILENT_STATE = "cqust_auto_silent_state"
         private const val KEY_PREV_RINGER_MODE = "prev_ringer_mode"
         private const val KEY_WAS_MUTED_BY_APP = "was_muted_by_app"
+        private const val KEY_PREV_DND_FILTER = "prev_dnd_filter"
+        private const val KEY_WAS_DND_BY_APP = "was_dnd_by_app"
 
-        // 切换系统免打扰或静音模式
+        // 切换免打扰或静音模式并恢复原状态
         fun toggleMode(context: Context, isEnabled: Boolean, modeType: AutoControlMode) {
             val audioManager = context.getSystemService<AudioManager>()
             val notificationManager = context.getSystemService<NotificationManager>()
             if (audioManager == null || notificationManager == null) return
             if (!notificationManager.isNotificationPolicyAccessGranted) return
+            val sp = context.getSharedPreferences(PREFS_AUTO_SILENT_STATE, Context.MODE_PRIVATE)
 
             when (modeType) {
                 AutoControlMode.DND -> {
                     try {
-                        notificationManager.setInterruptionFilter(
-                            if (isEnabled) NotificationManager.INTERRUPTION_FILTER_PRIORITY
-                            else NotificationManager.INTERRUPTION_FILTER_ALL
-                        )
+                        if (isEnabled) {
+                            val currentFilter = notificationManager.currentInterruptionFilter
+                            if (currentFilter == NotificationManager.INTERRUPTION_FILTER_ALL) {
+                                sp.edit()
+                                    .putInt(KEY_PREV_DND_FILTER, currentFilter)
+                                    .putBoolean(KEY_WAS_DND_BY_APP, true)
+                                    .apply()
+                                notificationManager.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+                            } else {
+                                sp.edit().putBoolean(KEY_WAS_DND_BY_APP, false).apply()
+                            }
+                        } else {
+                            if (sp.getBoolean(KEY_WAS_DND_BY_APP, false)) {
+                                val prevFilter = sp.getInt(KEY_PREV_DND_FILTER, NotificationManager.INTERRUPTION_FILTER_ALL)
+                                notificationManager.setInterruptionFilter(prevFilter)
+                            }
+                            sp.edit().remove(KEY_PREV_DND_FILTER).remove(KEY_WAS_DND_BY_APP).apply()
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Toggle DND filter failed", e)
                     }
                 }
                 AutoControlMode.SILENT -> {
                     try {
-                        val sp = context.getSharedPreferences(PREFS_AUTO_SILENT_STATE, Context.MODE_PRIVATE)
                         if (isEnabled) {
                             val currentMode = audioManager.ringerMode
                             if (currentMode != AudioManager.RINGER_MODE_SILENT) {
@@ -202,17 +219,18 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
 
                 val settings = settingsRepository.getAppSettingsOnce()
                 val actionType = currentIntent.getStringExtra(EXTRA_DND_ACTION)
+                val isTest = currentIntent.getBooleanExtra(EXTRA_IS_TEST, false)
 
                 if (actionType != null) {
-                    if (settings.autoDndEnabled) {
-                        handleDndAction(ctx, currentIntent, actionType, settings.autoControlMode)
+                    if (isTest || settings.autoDndEnabled) {
+                        handleDndAction(ctx, currentIntent, actionType, settings.autoControlMode, isTest)
                     }
-                } else if (settings.reminderEnabled) {
+                } else if (isTest || settings.reminderEnabled) {
                     val notifyId = currentIntent.getIntExtra(EXTRA_NOTIFICATION_ID, 1001)
                     if (currentIntent.getBooleanExtra(EXTRA_IS_EXAM, false)) {
                         handleExamReminder(ctx, currentIntent, notifyId)
                     } else {
-                        handleCourseReminder(ctx, currentIntent, notifyId)
+                        handleCourseReminder(ctx, currentIntent, notifyId, isTest)
                     }
                 }
             } catch (e: Exception) {
@@ -233,17 +251,19 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
         }
 
         val semester = scheduleRepository.getCurrentSemesterOnce() ?: return false
-        val weekNumber = SemesterDateHelper.calculateWeekNumber(semester.effectiveStartDate, date, semester.totalWeeks)
-        if (weekNumber !in 1..semester.totalWeeks) return false
+        val weekNumber = SemesterDateHelper.calculateRawWeekNumber(semester.effectiveStartDate, date, semester.totalWeeks)
+            ?: return false
 
         val tableId = scheduleRepository.getOrCreateDefaultTableId()
-        val allEvents = scheduleRepository.getAllEventsForTable(tableId)
-        val weekEvents = allEvents.filter { it.week == weekNumber && it.day == date.dayOfWeek.value }
-        if (weekEvents.isEmpty()) return false
-
+        val allEvents = scheduleRepository.getAllEventsForSemester(tableId, semester.id)
         val adjustments = scheduleRepository.getAdjustmentsOnce(tableId, semester.id)
-        val adjustedEvents = applyAdjustmentsToWeekEvents(weekEvents, adjustments, weekNumber, allEvents)
-        return adjustedEvents.any { it.startSection == section }
+        val dayEvents = EffectiveScheduleResolver.resolveDayEvents(
+            allEvents = allEvents,
+            adjustments = adjustments,
+            weekNumber = weekNumber,
+            dayOfWeek = date.dayOfWeek.value
+        )
+        return dayEvents.any { it.startSection == section }
     }
 
     // 处理通知清除
@@ -256,12 +276,20 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
     }
 
     // 处理免打扰/静音启闭切换与小组件刷新
-    private suspend fun handleDndAction(context: Context, intent: Intent, actionType: String, mode: AutoControlMode) {
+    private suspend fun handleDndAction(
+        context: Context,
+        intent: Intent,
+        actionType: String,
+        mode: AutoControlMode,
+        isTest: Boolean = false
+    ) {
         when (actionType) {
             DND_ACTION_START -> {
-                val section = intent.getIntExtra(EXTRA_SECTION, -1)
-                val dateStr = intent.getStringExtra(EXTRA_DATE)
-                if (!hasActiveCourseAtSlot(dateStr, section)) return
+                if (!isTest) {
+                    val section = intent.getIntExtra(EXTRA_SECTION, -1)
+                    val dateStr = intent.getStringExtra(EXTRA_DATE)
+                    if (!hasActiveCourseAtSlot(dateStr, section)) return
+                }
                 AudioModeControlService.start(context, true, mode)
             }
             DND_ACTION_END -> {
@@ -271,10 +299,17 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
     }
 
     // 处理上课横幅通知展示与小组件刷新
-    private suspend fun handleCourseReminder(context: Context, intent: Intent, notifyId: Int) {
-        val section = intent.getIntExtra(EXTRA_SECTION, -1)
-        val dateStr = intent.getStringExtra(EXTRA_DATE)
-        if (!hasActiveCourseAtSlot(dateStr, section)) return
+    private suspend fun handleCourseReminder(
+        context: Context,
+        intent: Intent,
+        notifyId: Int,
+        isTest: Boolean = false
+    ) {
+        if (!isTest) {
+            val section = intent.getIntExtra(EXTRA_SECTION, -1)
+            val dateStr = intent.getStringExtra(EXTRA_DATE)
+            if (!hasActiveCourseAtSlot(dateStr, section)) return
+        }
 
         val courseName = intent.getStringExtra(EXTRA_COURSE_NAME) ?: context.getString(R.string.notification_unknown_course)
         val position = intent.getStringExtra(EXTRA_COURSE_POSITION) ?: context.getString(R.string.notification_unknown_position)

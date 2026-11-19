@@ -1,6 +1,7 @@
 package top.msfxp.schedule.data.model
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import top.msfxp.schedule.util.CourseLocationFormatter
@@ -45,6 +46,14 @@ data class RawExamItem(
 // 考试记录实体
 @Entity(
     tableName = "exam_records",
+    foreignKeys = [
+        ForeignKey(
+            entity = CourseTable::class,
+            parentColumns = ["id"],
+            childColumns = ["tableId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [Index(value = ["tableId", "semesterId", "examDate"], name = "index_exam_records_semester")]
 )
 data class ExamRecord(
@@ -124,13 +133,14 @@ data class ExamFetchResult(
     val isSessionExpired: Boolean = false
 )
 
-// 构造考试记录主键（按课程统一标识）
+// 构造考试记录主键（按课程基础代码与考试批次区分）
 fun buildExamRecordId(tableId: String, semesterId: String, item: RawExamItem): String {
-    val unifiedCode = courseUnifiedCode(item.courseCode)
+    val baseCode = requireBaseCourseCode(item.courseCode, "考试:${item.courseName}")
+    val batchType = item.examType.ifBlank { EXAM_TYPE_DEFAULT }
     val key = if (item.isScheduled) {
-        "$unifiedCode|${item.examDate}|${item.startTime}"
+        "$batchType|$baseCode|${item.examDate}|${item.startTime}"
     } else {
-        "$unifiedCode|${item.sequence}"
+        "$batchType|$baseCode|${item.sequence}"
     }
     return "$tableId|$semesterId|$key"
 }

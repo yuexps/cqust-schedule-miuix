@@ -5,7 +5,6 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import top.msfxp.schedule.data.api.CqustSyncManager
-import top.msfxp.schedule.data.db.MIGRATION_1_2
 import top.msfxp.schedule.data.db.ScheduleDatabase
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
@@ -27,8 +26,7 @@ val appModule = module {
             get(),
             ScheduleDatabase::class.java,
             "cqust_schedule_database"
-        ).addMigrations(MIGRATION_1_2)
-            .fallbackToDestructiveMigration(dropAllTables = true)
+        ).fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
     single { get<ScheduleDatabase>().scheduleDao() }
@@ -41,7 +39,7 @@ val appModule = module {
 
     // 服务与同步组件
     single { CalendarSyncHelper(get(), get(), get(), get()) }
-    single { CqustSyncManager(get(), get(), get()) }
+    single { CqustSyncManager(get(), get(), get(), get()) }
 
     // 课表与闹钟调度观察器
     single(createdAtStart = true) {

@@ -1,12 +1,15 @@
 package top.msfxp.schedule.data.repository
 
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import top.msfxp.schedule.data.db.ScheduleDao
 import top.msfxp.schedule.data.model.*
+import top.msfxp.schedule.domain.EffectiveScheduleResolver
 import java.time.LocalTime
 
 // 课表与学期数据仓库
@@ -14,6 +17,8 @@ class ScheduleRepository(
     private val dao: ScheduleDao
 ) {
     val defaultTableFlow: Flow<CourseTable?> = dao.getDefaultCourseTable()
+    val allSemestersFlow: Flow<List<Semester>> = dao.getAllSemesters()
+    val currentSemesterFlow: Flow<Semester?> = dao.getCurrentSemester()
 
     // 获取或创建默认课表 ID
     suspend fun getOrCreateDefaultTableId(): String {
@@ -28,23 +33,37 @@ class ScheduleRepository(
         return "default"
     }
 
-    // 观察全学期课程及事件
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val allCoursesFlow: Flow<List<CourseWithEvents>> = defaultTableFlow.flatMapLatest { table ->
-        val tableId = table?.id
-        if (tableId != null) {
-            dao.getAllCoursesWithEvents(tableId)
+    // 观察当前激活学期的全部课程及事件
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val allCoursesFlow: Flow<List<CourseWithEvents>> = combine(
+        defaultTableFlow,
+        currentSemesterFlow
+    ) { table, semester ->
+        table?.id to semester?.id
+    }.distinctUntilChanged().flatMapLatest { (tableId, semesterId) ->
+        if (tableId != null && !semesterId.isNullOrBlank()) {
+            dao.getAllCoursesWithEvents(tableId, semesterId)
         } else {
             flowOf(emptyList())
         }
     }
 
-    fun getAllCoursesWithEvents(tableId: String): Flow<List<CourseWithEvents>> {
-        return dao.getAllCoursesWithEvents(tableId)
+    fun getAllCoursesWithEvents(tableId: String, semesterId: String): Flow<List<CourseWithEvents>> {
+        return dao.getAllCoursesWithEvents(tableId, semesterId)
     }
 
-    suspend fun getAllCoursesWithEventsOnce(tableId: String): List<CourseWithEvents> {
-        return dao.getAllCoursesWithEventsOnce(tableId)
+    suspend fun getAllCoursesWithEventsOnce(tableId: String, semesterId: String): List<CourseWithEvents> {
+        return dao.getAllCoursesWithEventsOnce(tableId, semesterId)
+    }
+
+    // 检查指定学期是否已有本地缓存课表
+    suspend fun hasCoursesForSemester(tableId: String, semesterId: String): Boolean {
+        return dao.countCoursesForSemester(tableId, semesterId) > 0
+    }
+
+    // 读取指定学期已有课程配色映射
+    suspend fun getCourseColorMap(tableId: String, semesterId: String): Map<String, Int> {
+        return dao.getCourseColorsForSemester(tableId, semesterId).associate { it.id to it.colorIndex }
     }
 
     // 更新课程配色编号
@@ -52,18 +71,19 @@ class ScheduleRepository(
         dao.updateCourseColor(tableId, courseId, colorIndex)
     }
 
-    // 保存课表数据
-    suspend fun saveSchedule(
+    // 按学期原子替换课程与事件
+    suspend fun saveSemesterSchedule(
         tableId: String,
+        semesterId: String,
         courses: List<Course>,
         events: List<CourseEvent>
     ) {
-        dao.replaceCoursesAndEvents(tableId, courses, events)
+        dao.replaceSemesterCoursesAndEvents(tableId, semesterId, courses, events)
     }
 
-    // 获取全学期所有已排教学事件
-    suspend fun getAllEventsForTable(tableId: String): List<CourseEventWithMeta> {
-        return dao.getAllEventsForTable(tableId)
+    // 获取指定学期所有已排教学事件
+    suspend fun getAllEventsForSemester(tableId: String, semesterId: String): List<CourseEventWithMeta> {
+        return dao.getAllEventsForSemester(tableId, semesterId)
     }
 
     // 获取今日时间轴课程列表
@@ -73,11 +93,10 @@ class ScheduleRepository(
         dayOfWeek: Int,
         currentWeek: Int
     ): List<TodayCourseItem> {
-        val allEvents = dao.getAllEventsForTable(tableId)
-        val rawWeekEvents = allEvents.filter { it.week == currentWeek }
+        if (semesterId.isBlank()) return emptyList()
+        val allEvents = dao.getAllEventsForSemester(tableId, semesterId)
         val adjustments = dao.getAdjustmentsOnce(tableId, semesterId)
-        val adjustedWeekEvents = applyAdjustmentsToWeekEvents(rawWeekEvents, adjustments, currentWeek, allEvents)
-        val events = adjustedWeekEvents.filter { it.day == dayOfWeek }
+        val events = EffectiveScheduleResolver.resolveDayEvents(allEvents, adjustments, currentWeek, dayOfWeek)
         val currentTime = LocalTime.now()
 
         // 按作息时刻排序，使非标准作息节次落在正确位置
@@ -103,21 +122,17 @@ class ScheduleRepository(
         }.sortedWith(compareBy({ it.startTime }, { it.event.courseName }))
     }
 
-    // 清空课表课程与事件
-    suspend fun clearCourses(tableId: String) {
-        dao.deleteEventsByTableId(tableId)
-        dao.deleteCoursesByTableId(tableId)
+    // 清空课表下全部学期的课程与事件
+    suspend fun clearAllCourses(tableId: String) {
+        dao.clearAllCoursesForTable(tableId)
     }
 
     // 学期数据操作
-    val allSemestersFlow: Flow<List<Semester>> = dao.getAllSemesters()
-    val currentSemesterFlow: Flow<Semester?> = dao.getCurrentSemester()
-
     suspend fun getCurrentSemesterOnce(): Semester? = dao.getCurrentSemesterOnce()
     suspend fun getSemesterById(semesterId: String): Semester? = dao.getSemesterById(semesterId)
 
-    suspend fun saveSemesters(semesters: List<Semester>) {
-        dao.insertSemesters(semesters)
+    suspend fun replaceSemesters(semesters: List<Semester>, activeSemesterId: String) {
+        dao.replaceSemesters(semesters, activeSemesterId)
     }
 
     suspend fun setActiveSemester(semesterId: String) {
@@ -150,60 +165,33 @@ class ScheduleRepository(
         tableId: String = "default",
         semesterId: String,
         courseId: String,
+        eventType: String,
         week: Int,
         day: Int,
         startSection: Int
-    ): CourseAdjustment? = dao.getAdjustmentForEvent(tableId, semesterId, courseId, week, day, startSection)
+    ): CourseAdjustment? = dao.getAdjustmentForEvent(
+        tableId = tableId,
+        semesterId = semesterId,
+        courseId = courseId,
+        eventType = eventType,
+        week = week,
+        day = day,
+        startSection = startSection
+    )
 
     // 移动课程（目标坐标不能有课）
     suspend fun moveCourse(adjustment: CourseAdjustment) {
-        val existing = dao.getAdjustmentForEvent(
-            tableId = adjustment.tableId,
-            semesterId = adjustment.semesterId,
-            courseId = adjustment.courseId,
-            week = adjustment.originalWeek,
-            day = adjustment.originalDay,
-            startSection = adjustment.originalStartSection
-        )
-        val finalAdjustment = if (existing != null) adjustment.copy(id = existing.id) else adjustment
-        dao.upsertAdjustment(finalAdjustment.copy(isSuspended = false))
+        dao.upsertAdjustmentForEvent(adjustment.copy(isSuspended = false))
     }
 
-    // 调换两门课程（目标坐标必须有课，两课互换时段）
+    // 调换两门课程（单事务原子互换时段）
     suspend fun swapCourses(adjA: CourseAdjustment, adjB: CourseAdjustment) {
-        val existingA = dao.getAdjustmentForEvent(
-            tableId = adjA.tableId,
-            semesterId = adjA.semesterId,
-            courseId = adjA.courseId,
-            week = adjA.originalWeek,
-            day = adjA.originalDay,
-            startSection = adjA.originalStartSection
-        )
-        val existingB = dao.getAdjustmentForEvent(
-            tableId = adjB.tableId,
-            semesterId = adjB.semesterId,
-            courseId = adjB.courseId,
-            week = adjB.originalWeek,
-            day = adjB.originalDay,
-            startSection = adjB.originalStartSection
-        )
-        val finalA = if (existingA != null) adjA.copy(id = existingA.id) else adjA
-        val finalB = if (existingB != null) adjB.copy(id = existingB.id) else adjB
-        dao.upsertAdjustments(listOf(finalA.copy(isSuspended = false), finalB.copy(isSuspended = false)))
+        dao.swapAdjustments(adjA, adjB)
     }
 
     // 标记删除（本节停课）
     suspend fun markCourseDeleted(adjustment: CourseAdjustment) {
-        val existing = dao.getAdjustmentForEvent(
-            tableId = adjustment.tableId,
-            semesterId = adjustment.semesterId,
-            courseId = adjustment.courseId,
-            week = adjustment.originalWeek,
-            day = adjustment.originalDay,
-            startSection = adjustment.originalStartSection
-        )
-        val finalAdjustment = if (existing != null) adjustment.copy(id = existing.id) else adjustment
-        dao.upsertAdjustment(finalAdjustment.copy(isSuspended = true))
+        dao.upsertAdjustmentForEvent(adjustment.copy(isSuspended = true))
     }
 
     // 保存单项调课通用方法
@@ -220,89 +208,13 @@ class ScheduleRepository(
         dao.deleteAdjustmentById(id)
     }
 
-    // 一键清空所有调课记录
+    // 清空当前学期调课记录
+    suspend fun clearAdjustmentsBySemester(tableId: String = "default", semesterId: String) {
+        dao.clearAdjustmentsBySemester(tableId, semesterId)
+    }
+
+    // 一键清空全部调课记录
     suspend fun clearAllAdjustments(tableId: String = "default") {
         dao.clearAllAdjustments(tableId)
     }
-
-}
-
-// 应用调课规则到指定周次的课程事件列表
-fun applyAdjustmentsToWeekEvents(
-    events: List<CourseEventWithMeta>,
-    adjustments: List<CourseAdjustment>,
-    weekNumber: Int,
-    allEvents: List<CourseEventWithMeta> = emptyList()
-): List<CourseEventWithMeta> {
-    if (adjustments.isEmpty()) return events
-
-    val weekAdjustments = adjustments.filter { it.originalWeek == weekNumber || it.targetWeek == weekNumber }
-    if (weekAdjustments.isEmpty()) return events
-
-    val result = mutableListOf<CourseEventWithMeta>()
-
-    // 1. 处理原本周排课（本周内微调、停课剔除、调出到其他周）
-    for (event in events) {
-        val adj = weekAdjustments.find {
-            it.originalWeek == weekNumber &&
-            it.courseId == event.courseId &&
-            it.originalDay == event.day &&
-            it.originalStartSection == event.startSection
-        }
-
-        if (adj == null) {
-            result.add(event)
-        } else if (adj.isSuspended) {
-            // 本节停课，不展示
-            continue
-        } else if (adj.targetWeek != weekNumber) {
-            // 调到其他周，本周不展示
-            continue
-        } else {
-            // 本周内调时段或地点
-            result.add(
-                event.copy(
-                    day = adj.targetDay,
-                    startSection = adj.targetStartSection,
-                    endSection = adj.targetEndSection,
-                    location = if (adj.targetLocation.isNotBlank()) adj.targetLocation else event.location
-                ).apply {
-                    this.weeks = event.weeks
-                    this.isAdjusted = true
-                }
-            )
-        }
-    }
-
-    // 2. 处理从其他周跨周调入本周的课程
-    val incomingAdjustments = weekAdjustments.filter {
-        it.originalWeek != weekNumber && it.targetWeek == weekNumber && !it.isSuspended
-    }
-    if (incomingAdjustments.isNotEmpty() && allEvents.isNotEmpty()) {
-        for (incomingAdj in incomingAdjustments) {
-            val originEvent = allEvents.find {
-                it.courseId == incomingAdj.courseId &&
-                it.week == incomingAdj.originalWeek &&
-                it.day == incomingAdj.originalDay &&
-                it.startSection == incomingAdj.originalStartSection
-            } ?: allEvents.find { it.courseId == incomingAdj.courseId }
-
-            if (originEvent != null) {
-                result.add(
-                    originEvent.copy(
-                        week = weekNumber,
-                        day = incomingAdj.targetDay,
-                        startSection = incomingAdj.targetStartSection,
-                        endSection = incomingAdj.targetEndSection,
-                        location = if (incomingAdj.targetLocation.isNotBlank()) incomingAdj.targetLocation else originEvent.location
-                    ).apply {
-                        this.weeks = originEvent.weeks
-                        this.isAdjusted = true
-                    }
-                )
-            }
-        }
-    }
-
-    return result
 }

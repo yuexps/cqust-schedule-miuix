@@ -58,55 +58,48 @@ class CourseOverviewViewModel(
     ) { allCourses, settings, exams ->
         val palette = parseCoursePaletteJson(settings.customCourseColorsJson)
         val examsByCourseId = exams.filter { !it.courseId.isNullOrBlank() }.groupBy { it.courseId }
-        val groups = allCourses.groupBy { it.course.unifiedCode }.map { (_, courseWithEventsList) ->
-            val theoryCourse = courseWithEventsList.find { !it.course.isPractical }
-            val practicalCourse = courseWithEventsList.find { it.course.isPractical }
-            val primaryCourse = theoryCourse ?: practicalCourse ?: courseWithEventsList.first()
-            val course = primaryCourse.course
+        val groups = allCourses.map { relation ->
+            val course = relation.course
+            val theoryEvents = relation.events.filter { !it.isPractical }
+            val practicalEvents = relation.events.filter { it.isPractical }
 
-            val theorySlots = theoryCourse?.toCompressedSlots()
-                ?.sortedWith(compareBy({ it.day }, { sectionTimeKey(it.startSection) }, { it.weeks.minOrNull() ?: 0 }))
-                .orEmpty()
-            val practicalSlots = practicalCourse?.toCompressedSlots()
-                ?.sortedWith(compareBy({ it.weeks.minOrNull() ?: 0 }, { it.day }, { sectionTimeKey(it.startSection) }))
-                .orEmpty()
+            val theorySlots = theoryEvents.toCompressedSlots()
+                .sortedWith(compareBy({ it.day }, { sectionTimeKey(it.startSection) }, { it.weeks.minOrNull() ?: 0 }))
+            val practicalSlots = practicalEvents.toCompressedSlots()
+                .sortedWith(compareBy({ it.weeks.minOrNull() ?: 0 }, { it.day }, { sectionTimeKey(it.startSection) }))
 
-            val theoryTeacher = theoryCourse?.events
-                ?.map { it.teacher }
-                ?.filter { it.isNotBlank() }
-                ?.distinct()
-                ?.joinToString("/")
-                .orEmpty()
+            val theoryTeacher = theoryEvents
+                .map { it.teacher }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .joinToString("/")
 
-            val practicalTeacher = practicalCourse?.events
-                ?.map { it.teacher }
-                ?.filter { it.isNotBlank() }
-                ?.distinct()
-                ?.joinToString("/")
-                .orEmpty()
+            val practicalTeacher = practicalEvents
+                .map { it.teacher }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .joinToString("/")
 
-            val projectCount = practicalCourse?.events
-                ?.map { it.projectName }
-                ?.filter { it.isNotBlank() }
-                ?.distinct()
-                ?.size ?: 0
+            val projectCount = practicalEvents
+                .map { it.projectName }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .size
 
             CourseGroupItem(
                 courseId = course.id,
-                courseCode = course.courseCode.ifBlank { practicalCourse?.course?.courseCode.orEmpty() },
+                courseCode = course.courseCode,
                 name = course.name,
-                credit = course.credit.ifBlank { practicalCourse?.course?.credit.orEmpty() },
-                category = course.category.ifBlank { practicalCourse?.course?.category.orEmpty() },
+                credit = course.credit,
+                category = course.category,
                 theoryTeacher = theoryTeacher,
                 practicalTeacher = practicalTeacher,
                 colorIndex = course.colorIndex,
                 theorySlots = theorySlots,
                 practicalSlots = practicalSlots,
-                isPracticalOnly = theoryCourse == null && practicalCourse != null,
+                isPracticalOnly = theoryEvents.isEmpty() && practicalEvents.isNotEmpty(),
                 projectCount = projectCount,
-                exams = courseWithEventsList
-                    .flatMap { relation -> examsByCourseId[relation.course.id].orEmpty() }
-                    .distinctBy { it.id }
+                exams = examsByCourseId[course.id].orEmpty().distinctBy { it.id }
             )
         }.sortedBy { it.name }
 

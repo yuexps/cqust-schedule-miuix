@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -133,9 +134,14 @@ fun ScheduleGrid(
                     ) {
                         // 背景网格分割线
                         val dividerColor = MiuixTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                        val density = LocalDensity.current
+                        val dashEffect = remember(density) {
+                            with(density) {
+                                PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()), 0f)
+                            }
+                        }
                         Canvas(modifier = Modifier.fillMaxSize()) {
                             val sectionHeightPx = SectionHeight.toPx()
-                            val dashEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 4.dp.toPx()), 0f)
 
                             for (i in 1..10) {
                                 val y = sectionHeightPx * i

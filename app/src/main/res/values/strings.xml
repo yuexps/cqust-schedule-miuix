@@ -236,6 +236,7 @@
     <string name="exam_date_format">%1$d月%2$d日</string>
     <string name="exam_datetime_format">%1$s %2$s %3$s-%4$s</string>
     <string name="exam_seat_number_format">%1$s号座位</string>
+    <string name="exam_detail_seat_number_format">%1$s号</string>
     <string name="exam_week_format">第%1$d周</string>
     <string name="schedule_exam_badge">考试</string>
     <string name="exam_detail_title">考试详情</string>

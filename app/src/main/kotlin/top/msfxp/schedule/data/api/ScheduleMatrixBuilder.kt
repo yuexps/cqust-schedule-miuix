@@ -1,86 +1,115 @@
 package top.msfxp.schedule.data.api
 
+import top.msfxp.schedule.data.model.COURSE_TYPE_PRACTICAL
+import top.msfxp.schedule.data.model.COURSE_TYPE_THEORY
 import top.msfxp.schedule.data.model.Course
 import top.msfxp.schedule.data.model.CourseEvent
 import top.msfxp.schedule.data.model.DefaultCourseColors
-import top.msfxp.schedule.data.model.COURSE_TYPE_PRACTICAL
-import top.msfxp.schedule.data.model.COURSE_TYPE_THEORY
-import top.msfxp.schedule.data.model.courseUnifiedCode
-import top.msfxp.schedule.data.model.unifiedCode
-import top.msfxp.schedule.util.CourseLocationFormatter
+import top.msfxp.schedule.data.model.buildCourseId
+import top.msfxp.schedule.data.model.requireBaseCourseCode
 
-// 课表时空矩阵构建器
+// 时空矩阵构建结果
+data class ScheduleBuildResult(
+    val courses: List<Course>,
+    val events: List<CourseEvent>,
+    val theoryCourseCount: Int,
+    val practicalCourseCount: Int
+)
+
+// 课表时空矩阵构建器（按基础课程代码归并课程主表，理论与实践事件统一下沉至 CourseEvent）
 object ScheduleMatrixBuilder {
 
-    // 构建课程元数据与时空事件列表
+    // 构建课程元数据与时空事件列表（优先保留已有课程配色）
     fun build(
         tableId: String,
+        semesterId: String,
         eamsCourses: List<RawEamsCourse>,
-        practicalItems: List<RawPracticalItem> = emptyList()
-    ): Pair<List<Course>, List<CourseEvent>> {
-        val colorIndexMap = mutableMapOf<String, Int>()
-        var currentColorIdx = 0
-        val colorAllocator: (String) -> Int = { name ->
-            colorIndexMap.getOrPut(name) { (currentColorIdx++) % DefaultCourseColors.size }
+        practicalItems: List<RawPracticalItem> = emptyList(),
+        existingColorMap: Map<String, Int> = emptyMap()
+    ): ScheduleBuildResult {
+        val theoryByBase = eamsCourses.groupBy {
+            requireBaseCourseCode(it.courseCode, "理论课:${it.name}")
+        }
+        val practicalByBase = practicalItems.groupBy {
+            requireBaseCourseCode(it.courseCode, "实践课:${it.name}")
         }
 
-        val (theoryCourses, theoryEvents) = buildTheoryCourses(tableId, eamsCourses, colorAllocator)
-        val (practiceCourses, practiceEvents) = buildPracticeCourses(tableId, practicalItems, theoryCourses, colorAllocator)
+        val allBaseCodes = (theoryByBase.keys + practicalByBase.keys).distinct()
+        val usedColors = existingColorMap.values.toMutableSet()
+        var nextColorIdx = 0
 
-        val courses = theoryCourses + practiceCourses
-        val events = theoryEvents + practiceEvents
-        return Pair(courses, events)
-    }
+        fun allocateColor(courseId: String): Int {
+            existingColorMap[courseId]?.let { return it }
+            // 优先分配尚未占用的调色槽位
+            repeat(DefaultCourseColors.size) {
+                val candidate = (nextColorIdx++) % DefaultCourseColors.size
+                if (usedColors.add(candidate)) return candidate
+            }
+            return (nextColorIdx++) % DefaultCourseColors.size
+        }
 
-    // 构建常规理论课程及事件
-    private fun buildTheoryCourses(
-        tableId: String,
-        eamsCourses: List<RawEamsCourse>,
-        colorAllocator: (String) -> Int
-    ): Pair<List<Course>, List<CourseEvent>> {
-        val courseList = mutableListOf<Course>()
-        val eventList = mutableListOf<CourseEvent>()
+        val courses = mutableListOf<Course>()
+        val events = mutableListOf<CourseEvent>()
 
-        for ((_, rawList) in eamsCourses.groupBy { courseUnifiedCode(it.courseCode) }) {
-            val first = rawList.first()
-            val unifiedCode = courseUnifiedCode(first.courseCode)
-            val courseId = "${tableId}_THEORY_$unifiedCode"
-            val course = Course(
-                id = courseId,
-                tableId = tableId,
-                courseCode = first.courseCode,
-                name = first.name,
-                credit = first.credit,
-                category = first.category,
-                courseType = COURSE_TYPE_THEORY,
-                colorIndex = colorAllocator(unifiedCode),
-                remark = first.remark
+        for (baseCode in allBaseCodes) {
+            val theoryList = theoryByBase[baseCode].orEmpty()
+            val practicalList = practicalByBase[baseCode].orEmpty()
+            val courseId = buildCourseId(tableId, semesterId, baseCode)
+
+            val firstTheory = theoryList.firstOrNull()
+            val firstPractical = practicalList.firstOrNull()
+
+            courses.add(
+                Course(
+                    id = courseId,
+                    tableId = tableId,
+                    semesterId = semesterId,
+                    baseCode = baseCode,
+                    courseCode = firstTheory?.courseCode?.ifBlank { baseCode } ?: baseCode,
+                    name = firstTheory?.name ?: firstPractical?.name.orEmpty(),
+                    credit = firstTheory?.credit.orEmpty(),
+                    category = firstTheory?.category?.ifBlank { "实践教学" } ?: "实践教学",
+                    colorIndex = allocateColor(courseId),
+                    remark = firstTheory?.remark.orEmpty()
+                )
             )
-            courseList.add(course)
 
-            for (c in rawList) {
-                eventList.addAll(expandTheoryEvents(courseId, tableId, c))
+            for (raw in theoryList) {
+                events.addAll(expandTheoryEvents(courseId, tableId, semesterId, raw))
+            }
+            for (item in practicalList) {
+                events.addAll(expandPracticalEvents(courseId, tableId, semesterId, item))
             }
         }
-        return Pair(courseList, eventList)
+
+        return ScheduleBuildResult(
+            courses = courses,
+            events = events,
+            theoryCourseCount = theoryByBase.size,
+            practicalCourseCount = practicalByBase.size
+        )
     }
 
-    // 展开单门理论课的各周次事件
+    // 展开单条常规理论课的各周次事件
     private fun expandTheoryEvents(
         courseId: String,
         tableId: String,
+        semesterId: String,
         rawCourse: RawEamsCourse
     ): List<CourseEvent> {
         val targetWeeks = if (rawCourse.weeks.isEmpty()) listOf(0) else rawCourse.weeks
+        val rawLocation = rawCourse.position.trim()
         return targetWeeks.map { week ->
             CourseEvent(
                 courseId = courseId,
                 tableId = tableId,
+                semesterId = semesterId,
+                eventType = COURSE_TYPE_THEORY,
                 week = week,
                 day = rawCourse.day,
                 startSection = rawCourse.startSection,
                 endSection = rawCourse.endSection,
-                location = CourseLocationFormatter.format(rawCourse.position),
+                location = rawLocation,
                 teacher = rawCourse.teacher,
                 projectName = "",
                 studentCount = rawCourse.studentCount
@@ -88,63 +117,25 @@ object ScheduleMatrixBuilder {
         }
     }
 
-    // 构建实践教学课程及事件
-    private fun buildPracticeCourses(
-        tableId: String,
-        practicalItems: List<RawPracticalItem>,
-        theoryCourses: List<Course>,
-        colorAllocator: (String) -> Int
-    ): Pair<List<Course>, List<CourseEvent>> {
-        if (practicalItems.isEmpty()) return Pair(emptyList(), emptyList())
-
-        val courseList = mutableListOf<Course>()
-        val eventList = mutableListOf<CourseEvent>()
-        val theoryByKey = theoryCourses.associateBy { it.unifiedCode }
-
-        for ((_, pList) in practicalItems.groupBy { courseUnifiedCode(it.courseCode) }) {
-            val first = pList.first()
-            val unifiedCode = courseUnifiedCode(first.courseCode)
-            val matchedTheory = theoryByKey[unifiedCode]
-            val colorIdx = matchedTheory?.colorIndex ?: colorAllocator(unifiedCode)
-            val courseId = "${tableId}_PRACTICAL_$unifiedCode"
-
-            val practicalCourse = Course(
-                id = courseId,
-                tableId = tableId,
-                courseCode = unifiedCode,
-                name = first.name,
-                credit = matchedTheory?.credit.orEmpty(),
-                category = matchedTheory?.category?.ifBlank { "实践教学" } ?: "实践教学",
-                courseType = COURSE_TYPE_PRACTICAL,
-                colorIndex = colorIdx,
-                remark = ""
-            )
-            courseList.add(practicalCourse)
-
-            for (item in pList) {
-                eventList.addAll(expandPracticalEvents(courseId, tableId, item))
-            }
-        }
-        return Pair(courseList, eventList)
-    }
-
     // 展开单条实践项目的各周次事件
     private fun expandPracticalEvents(
         courseId: String,
         tableId: String,
+        semesterId: String,
         item: RawPracticalItem
     ): List<CourseEvent> {
-        val cleanLocation = CourseLocationFormatter.format(item.location)
-
+        val rawLocation = item.location.trim()
         return item.weeks.map { week ->
             CourseEvent(
                 courseId = courseId,
                 tableId = tableId,
+                semesterId = semesterId,
+                eventType = COURSE_TYPE_PRACTICAL,
                 week = week,
                 day = item.day,
                 startSection = item.startSection,
                 endSection = item.endSection,
-                location = cleanLocation,
+                location = rawLocation,
                 teacher = item.teacher,
                 projectName = item.projectName,
                 studentCount = item.studentCount

@@ -4,6 +4,7 @@ import io.ktor.client.statement.*
 import top.msfxp.schedule.data.model.EXAM_TYPE_DEFAULT
 import top.msfxp.schedule.data.model.ExamFetchResult
 import top.msfxp.schedule.data.model.RawExamItem
+import top.msfxp.schedule.data.model.requireBaseCourseCode
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -21,6 +22,10 @@ object CqustExamParser {
     )
     private val ROW_REGEX = Regex("""<tr[^>]*>([\s\S]*?)</tr>""", RegexOption.IGNORE_CASE)
     private val CELL_REGEX = Regex("""<td[^>]*>([\s\S]*?)</td>""", RegexOption.IGNORE_CASE)
+    private val TABLE_REGEX = Regex(
+        """<table[^>]*class=["'][^"']*formTable[^"']*["'][^>]*>([\s\S]*?)</table>""",
+        RegexOption.IGNORE_CASE
+    )
     private val TOOLBAR_REGEX = Regex("""bg\.ui\.toolbar\([^,]+,\s*['"]([^'"]+)['"]\s*\)""")
     private val BREAK_REGEX = Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE)
     private val TAG_REGEX = Regex("""<[^>]+>""")
@@ -50,13 +55,40 @@ object CqustExamParser {
         }
     }
 
-    // 解析考试 HTML 片段，批次名取自页面工具栏
+    // 按“工具栏 + 表格”多段解析考试 HTML（如期末考试、已完成考试等独立批次）
     fun parseExamHtml(html: String): List<RawExamItem> {
-        val examType = TOOLBAR_REGEX.find(html)?.groupValues?.get(1)?.trim().orEmpty()
-            .ifBlank { EXAM_TYPE_DEFAULT }
-        return ROW_REGEX.findAll(html)
+        val toolbars = TOOLBAR_REGEX.findAll(html).toList()
+        val tables = TABLE_REGEX.findAll(html).toList()
+        if (tables.isEmpty()) {
+            val fallbackType = toolbars.firstOrNull()?.groupValues?.get(1)?.trim().orEmpty()
+                .ifBlank { EXAM_TYPE_DEFAULT }
+            return parseRowsInHtml(html, fallbackType)
+        }
+
+        val items = mutableListOf<RawExamItem>()
+        for (tableMatch in tables) {
+            val tableStart = tableMatch.range.first
+            val examType = toolbars
+                .lastOrNull { it.range.last < tableStart }
+                ?.groupValues?.get(1)?.trim().orEmpty()
+                .ifBlank { EXAM_TYPE_DEFAULT }
+            items.addAll(parseRowsInHtml(tableMatch.groupValues[1], examType))
+        }
+        return items.sortedWith(
+            compareBy(
+                { if (it.isScheduled) 0 else 1 },
+                { it.examDate.orEmpty() },
+                { it.startTime.orEmpty() },
+                { it.examType },
+                { it.sequence }
+            )
+        )
+    }
+
+    // 解析单张考试表格内的全部有效行
+    private fun parseRowsInHtml(tableHtml: String, examType: String): List<RawExamItem> {
+        return ROW_REGEX.findAll(tableHtml)
             .mapNotNull { parseRow(it.groupValues[1], examType) }
-            .sortedWith(compareBy({ if (it.isScheduled) 0 else 1 }, { it.examDate.orEmpty() }, { it.startTime.orEmpty() }, { it.sequence }))
             .toList()
     }
 
@@ -65,7 +97,8 @@ object CqustExamParser {
         val cells = CELL_REGEX.findAll(rowHtml).map { cleanCellText(it.groupValues[1]) }.toList()
         if (cells.isEmpty()) return null
         val sequence = cells[0].toIntOrNull() ?: return null
-        if (cells.size < 4 || cells[1].isBlank()) return null
+        if (cells.size < 4) return null
+        requireBaseCourseCode(cells[1], "考试:${cells[2].ifBlank { "#$sequence" }}")
 
         val base = RawExamItem(
             sequence = sequence,

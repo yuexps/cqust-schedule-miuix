@@ -34,20 +34,21 @@
 - [CqustVpnCrypto.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustVpnCrypto.kt)：WebVPN 专用 AES-CFB-128 URL/Path 编解码转换算法与密码加密。
 - [CqustEamsParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustEamsParser.kt)：常规理论课表与未排课 HTML 解析器（提取课程、节次、教师与教室）。
 - [CqustPracticalParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustPracticalParser.kt)：实验/集中实践教学环节课表 HTML 解析器。
-- [CqustExamParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustExamParser.kt)：期末考试 HTML 解析器（笔试与非标行识别、时间与日期解析）。
-- [ScheduleMatrixBuilder.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/ScheduleMatrixBuilder.kt)：时空原子矩阵构建器，按课程统一标识生成课程 ID 与理论/实践配对，处理单双周展开与地点规范化。
-- [CqustSyncManager.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustSyncManager.kt)：全流程课表同步协调器（含 AndroidKeyStore AES-GCM 凭证安全加解密）。
+- [CqustExamParser.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustExamParser.kt)：期末/已完成等多批次考试 HTML 分段解析器（笔试与非标行识别、时间与日期解析、课程代码强校验）。
+- [ScheduleMatrixBuilder.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/ScheduleMatrixBuilder.kt)：时空原子矩阵构建器，按基础课程代码 `baseCode` 归并每门课为唯一 `Course` 记录，将理论/实践类型下沉至 `CourseEvent`，同步时保留用户已有课程配色。
+- [CqustSyncManager.kt](../app/src/main/kotlin/top/msfxp/schedule/data/api/CqustSyncManager.kt)：全流程课表同步协调器（含单事务原子入库与 AndroidKeyStore AES-GCM 凭证安全加解密）。
 
 ---
 
-### 2.3 数据持久化与模型层 (`data/db`, `data/model`, `data/repository`)
-- [data/db/ScheduleDao.kt](../app/src/main/kotlin/top/msfxp/schedule/data/db/ScheduleDao.kt)：Room 数据库实例与全量 DAO（课程、课表事件、调课记录、考试记录的 CRUD 与事务批量写入）。
-- [data/model/CourseModels.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/CourseModels.kt)：课程实体、排课原子事件、调课变动记录及主题调色板数据模型；`courseUnifiedCode` 定义课程统一标识（课程序号去除教学班号后缀），供课程 ID、理论/实践配对、考试归属与总览分组复用。
+### 2.3 数据持久化、领域与模型层 (`data/db`, `data/model`, `data/repository`, `domain`)
+- [data/db/ScheduleDao.kt](../app/src/main/kotlin/top/msfxp/schedule/data/db/ScheduleDao.kt)：Room v3 本地数据库实例（开启 Schema 导出）与全量 DAO（按 `tableId + semesterId` 多学期隔离的 CRUD、唯一索引调课防重与事务批量写入）。
+- [data/model/CourseModels.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/CourseModels.kt)：课程主表实体（每门课唯一记录）、排课事件实体（含 `eventType`）、调课补丁实体及主题调色板数据模型；提供 `extractBaseCourseCode` / `requireBaseCourseCode` / `buildCourseId` 统一标识工具。
 - [data/model/AppSettings.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/AppSettings.kt)：应用偏好设置模型、学期/周次日期推算工具及 DataStore 键。
-- [data/model/ExamModels.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/ExamModels.kt)：考试原始条目、Room 实体与笔试/非标派生属性。
-- [data/repository/ScheduleRepository.kt](../app/src/main/kotlin/top/msfxp/schedule/data/repository/ScheduleRepository.kt)：课表统一数据仓库，提供响应式 Flow 查询、调课持久化与颜色更新。
+- [data/model/ExamModels.kt](../app/src/main/kotlin/top/msfxp/schedule/data/model/ExamModels.kt)：考试原始条目、Room 实体（含多批次唯一主键）与笔试/非标派生属性。
+- [data/repository/ScheduleRepository.kt](../app/src/main/kotlin/top/msfxp/schedule/data/repository/ScheduleRepository.kt)：课表统一数据仓库，提供随当前学期动态切换的响应式 Flow 查询、多学期离线缓存、调课事务持久化与颜色更新。
 - [data/repository/ExamRepository.kt](../app/src/main/kotlin/top/msfxp/schedule/data/repository/ExamRepository.kt)：考试记录仓库，按学期观察与整批替换考试数据。
 - [data/repository/SettingsRepository.kt](../app/src/main/kotlin/top/msfxp/schedule/data/repository/SettingsRepository.kt)：用户偏好设置、个人档案与自定义壁纸文件的持久化仓库。
+- [domain/EffectiveScheduleResolver.kt](../app/src/main/kotlin/top/msfxp/schedule/domain/EffectiveScheduleResolver.kt)：纯 Kotlin 有效排课领域解析器，统一收口“原始课程 + 调课补丁 + 考试映射”的周/日排课与全学期网格快照合成逻辑。
 
 ---
 

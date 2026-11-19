@@ -13,8 +13,8 @@ android {
         applicationId = "top.msfxp.schedule"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 13
-        versionName = "1.1.3"
+        versionCode = 14
+        versionName = "1.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -87,6 +87,10 @@ kotlin {
     jvmToolchain(21)
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     // AndroidX 基础
     implementation(libs.androidx.core.ktx)
@@ -129,4 +133,7 @@ dependencies {
     // Koin 依赖注入
     implementation(libs.koin.android)
     implementation(libs.koin.androidx.compose)
+
+    // 单元测试
+    testImplementation(libs.junit)
 }

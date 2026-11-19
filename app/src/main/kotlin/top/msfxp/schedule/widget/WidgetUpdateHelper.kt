@@ -25,7 +25,6 @@ import top.msfxp.schedule.data.model.effectiveStartDate
 import top.msfxp.schedule.data.model.getCourseColor
 import top.msfxp.schedule.data.model.parseCoursePaletteJson
 import top.msfxp.schedule.data.model.resolveExamColorIndex
-import top.msfxp.schedule.data.model.unifiedCode
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
@@ -60,11 +59,11 @@ suspend fun updateAllAppWidgets(context: Context) = withContext(Dispatchers.IO) 
         val startDate = currentSemester.effectiveStartDate
 
         val today = LocalDate.now()
-        val currentWeek = SemesterDateHelper.calculateWeekNumber(startDate, today, totalWeeks)
-        val isVacation = currentWeek < 1 || currentWeek > totalWeeks
+        val currentWeek = SemesterDateHelper.calculateRawWeekNumber(startDate, today, totalWeeks)
+        val isVacation = currentWeek == null
         val tableId = scheduleRepo.getOrCreateDefaultTableId()
 
-        val todayCourses = if (isVacation) emptyList() else scheduleRepo.getTodayCourses(tableId, currentSemester?.id.orEmpty(), today.dayOfWeek.value, currentWeek)
+        val todayCourses = if (currentWeek == null) emptyList() else scheduleRepo.getTodayCourses(tableId, currentSemester?.id.orEmpty(), today.dayOfWeek.value, currentWeek)
         val todayExams = if (isVacation) emptyList() else runCatching {
             WidgetDependencyContainer.examRepository
                 .getExamsOnce(tableId, currentSemester?.id.orEmpty())
@@ -77,12 +76,12 @@ suspend fun updateAllAppWidgets(context: Context) = withContext(Dispatchers.IO) 
             val settings = runCatching { WidgetDependencyContainer.settingsRepository.getAppSettingsOnce() }.getOrNull()
             val palette = parseCoursePaletteJson(settings?.customCourseColorsJson)
             val courseColorIndexMap = runCatching {
-                val courses = scheduleRepo.getAllCoursesWithEventsOnce(tableId)
-                buildMap {
-                    courses.forEach { relation ->
-                        put(relation.course.id, relation.course.colorIndex)
-                        putIfAbsent(relation.course.unifiedCode, relation.course.colorIndex)
-                    }
+                val semesterId = currentSemester?.id.orEmpty()
+                if (semesterId.isBlank()) {
+                    emptyMap()
+                } else {
+                    scheduleRepo.getAllCoursesWithEventsOnce(tableId, semesterId)
+                        .associate { it.course.id to it.course.colorIndex }
                 }
             }.getOrDefault(emptyMap())
             val agenda = buildAgendaItems(context, todayCourses, todayExams, palette, courseColorIndexMap)

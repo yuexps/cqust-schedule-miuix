@@ -26,7 +26,7 @@ import top.msfxp.schedule.data.model.findSectionTimeSlot
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
-import top.msfxp.schedule.data.repository.applyAdjustmentsToWeekEvents
+import top.msfxp.schedule.domain.EffectiveScheduleResolver
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -95,7 +95,7 @@ class DndSchedulerWorker(
             val settings = settingsRepository.getAppSettingsOnce()
             val currentSemester = scheduleRepository.getCurrentSemesterOnce() ?: return Result.success()
             val tableId = scheduleRepository.getOrCreateDefaultTableId()
-            val allEvents = scheduleRepository.getAllEventsForTable(tableId)
+            val allEvents = scheduleRepository.getAllEventsForSemester(tableId, currentSemester.id)
             val adjustments = scheduleRepository.getAdjustmentsOnce(tableId, semesterId = currentSemester.id)
             val alarmManager = context.getSystemService<AlarmManager>() ?: return Result.success()
 
@@ -125,22 +125,27 @@ class DndSchedulerWorker(
         alarmManager: AlarmManager
     ) {
         val semester = scheduleContext.semester
-        val weekNumber = SemesterDateHelper.calculateWeekNumber(semester.effectiveStartDate, targetDate, semester.totalWeeks)
-        if (weekNumber !in 1..semester.totalWeeks) {
+        val weekNumber = SemesterDateHelper.calculateRawWeekNumber(semester.effectiveStartDate, targetDate, semester.totalWeeks)
+        if (weekNumber == null) {
             cancelAllSlotsForDate(alarmManager, targetDate)
             return
         }
 
         val dayOfWeek = targetDate.dayOfWeek.value
-        val weekEvents = scheduleContext.allEvents.filter { it.week == weekNumber && it.day in 1..7 }
-        val adjustedWeekEvents = applyAdjustmentsToWeekEvents(weekEvents, scheduleContext.adjustments, weekNumber, scheduleContext.allEvents)
-        val dayEvents = adjustedWeekEvents.filter { it.day == dayOfWeek }
+        val dayEvents = EffectiveScheduleResolver.resolveDayEvents(
+            allEvents = scheduleContext.allEvents,
+            adjustments = scheduleContext.adjustments,
+            weekNumber = weekNumber,
+            dayOfWeek = dayOfWeek
+        )
 
-        // 同一节次优先取实践课
+        // 课前提醒同节次优先实践课，免打扰按合并区间排程
         val startEvents = dayEvents
             .groupBy { it.startSection }
             .mapValues { (_, group) -> group.firstOrNull { it.isPractical } ?: group.first() }
-        val endEvents = dayEvents.associateBy { it.endSection }
+        val mergedDndRanges = EffectiveScheduleResolver.mergeDndSectionRanges(dayEvents)
+        val dndStartSections = mergedDndRanges.map { it.first }.toSet()
+        val dndEndSections = mergedDndRanges.map { it.second }.toSet()
         val settings = scheduleContext.settings
 
         // 非标准作息节次与标准作息节次一并排程
@@ -152,15 +157,14 @@ class DndSchedulerWorker(
                 cancelAlarm(alarmManager, buildRequestCode("REMIND", targetDate, section))
             }
 
-            if (startEvent != null && settings.autoDndEnabled) {
-                scheduleDndStart(startEvent, targetDate, alarmManager)
+            if (section in dndStartSections && settings.autoDndEnabled) {
+                scheduleDndStart(section, targetDate, alarmManager)
             } else {
                 cancelAlarm(alarmManager, buildRequestCode("DND_START", targetDate, section))
             }
 
-            val endEvent = endEvents[section]
-            if (endEvent != null && settings.autoDndEnabled) {
-                scheduleDndEnd(endEvent, targetDate, alarmManager)
+            if (section in dndEndSections && settings.autoDndEnabled) {
+                scheduleDndEnd(section, targetDate, alarmManager)
             } else {
                 cancelAlarm(alarmManager, buildRequestCode("DND_END", targetDate, section))
             }
@@ -243,21 +247,21 @@ class DndSchedulerWorker(
 
     // 注册课堂免打扰开启闹钟
     private fun scheduleDndStart(
-        event: CourseEventWithMeta,
+        startSection: Int,
         targetDate: LocalDate,
         alarmManager: AlarmManager
     ) {
-        val slot = findSectionTimeSlot(event.startSection)
+        val slot = findSectionTimeSlot(startSection)
         val startTime = parseSlotTime(slot?.startTime, LocalTime.of(8, 30))
         val triggerMillis = LocalDateTime.of(targetDate, startTime)
             .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
         if (triggerMillis <= System.currentTimeMillis()) return
 
-        val reqCode = buildRequestCode("DND_START", targetDate, event.startSection)
+        val reqCode = buildRequestCode("DND_START", targetDate, startSection)
         val intent = Intent(context, CourseAlarmReceiver::class.java).apply {
             putExtra(CourseAlarmReceiver.EXTRA_DND_ACTION, CourseAlarmReceiver.DND_ACTION_START)
-            putExtra(CourseAlarmReceiver.EXTRA_SECTION, event.startSection)
+            putExtra(CourseAlarmReceiver.EXTRA_SECTION, startSection)
             putExtra(CourseAlarmReceiver.EXTRA_DATE, targetDate.toString())
         }
         setExactAlarm(alarmManager, triggerMillis, createPendingIntent(reqCode, intent))
@@ -265,18 +269,18 @@ class DndSchedulerWorker(
 
     // 注册课堂免打扰恢复闹钟
     private fun scheduleDndEnd(
-        event: CourseEventWithMeta,
+        endSection: Int,
         targetDate: LocalDate,
         alarmManager: AlarmManager
     ) {
-        val slot = findSectionTimeSlot(event.endSection)
+        val slot = findSectionTimeSlot(endSection)
         val endTime = parseSlotTime(slot?.endTime, LocalTime.of(9, 15))
         val triggerMillis = LocalDateTime.of(targetDate, endTime)
             .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
         if (triggerMillis <= System.currentTimeMillis()) return
 
-        val reqCode = buildRequestCode("DND_END", targetDate, event.endSection)
+        val reqCode = buildRequestCode("DND_END", targetDate, endSection)
         val intent = Intent(context, CourseAlarmReceiver::class.java).apply {
             putExtra(CourseAlarmReceiver.EXTRA_DND_ACTION, CourseAlarmReceiver.DND_ACTION_END)
         }

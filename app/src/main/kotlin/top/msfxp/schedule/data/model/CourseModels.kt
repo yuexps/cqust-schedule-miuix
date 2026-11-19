@@ -28,7 +28,7 @@ data class CourseTable(
     val createdAt: Long
 )
 
-// 课程信息实体
+// 课程信息实体（按课表与学期隔离）
 @Entity(
     tableName = "courses",
     foreignKeys = [
@@ -40,8 +40,7 @@ data class CourseTable(
         )
     ],
     indices = [
-        Index(value = ["tableId"]),
-        Index(value = ["courseCode"])
+        Index(value = ["tableId", "semesterId"])
     ]
 )
 @Serializable
@@ -49,23 +48,35 @@ data class Course(
     @PrimaryKey
     val id: String,
     val tableId: String,
+    val semesterId: String,
+    val baseCode: String,
     val courseCode: String = "",
     val name: String,
     val credit: String = "",
     val category: String = "",
-    val courseType: String = COURSE_TYPE_THEORY,
     val colorIndex: Int = 0,
     val remark: String = ""
-) {
-    val isPractical: Boolean get() = courseType == COURSE_TYPE_PRACTICAL
+)
+
+// 提取基础课程代码（去除教学班号后缀，如 3JX1242A.05 -> 3JX1242A）
+fun extractBaseCourseCode(courseCode: String): String =
+    courseCode.substringBefore('.').trim()
+
+// 强校验并提取基础课程代码，缺失时立即终止解析
+fun requireBaseCourseCode(courseCode: String, context: String): String {
+    val raw = courseCode.trim()
+    val base = extractBaseCourseCode(raw)
+    if (raw.isEmpty() || base.isEmpty()) {
+        throw IllegalStateException("缺少课程代码($context)")
+    }
+    return base
 }
 
-// 课程统一标识：基础课程代码（去除教学班号后缀）
-fun courseUnifiedCode(code: String): String = code.substringBefore('.').trim()
+// 构造学期内唯一的课程主键
+fun buildCourseId(tableId: String, semesterId: String, baseCode: String): String =
+    "${tableId}_${semesterId}_${baseCode}"
 
-val Course.unifiedCode: String get() = courseUnifiedCode(courseCode)
-
-// 课程事件实体
+// 课程事件实体（承载常规理论与实践项目排课）
 @Entity(
     tableName = "course_events",
     foreignKeys = [
@@ -83,9 +94,8 @@ val Course.unifiedCode: String get() = courseUnifiedCode(courseCode)
         )
     ],
     indices = [
-        Index(value = ["tableId", "week"]),
-        Index(value = ["tableId", "week", "day"]),
-        Index(value = ["courseId"])
+        Index(value = ["courseId"]),
+        Index(value = ["tableId", "semesterId", "courseId", "eventType", "week", "day", "startSection"])
     ]
 )
 @Serializable
@@ -94,6 +104,8 @@ data class CourseEvent(
     val id: Long = 0,
     val courseId: String,
     val tableId: String,
+    val semesterId: String,
+    val eventType: String = COURSE_TYPE_THEORY,
     val week: Int,
     val day: Int,
     val startSection: Int,
@@ -102,7 +114,9 @@ data class CourseEvent(
     val teacher: String = "",
     val projectName: String = "",
     val studentCount: Int = 0
-)
+) {
+    val isPractical: Boolean get() = eventType == COURSE_TYPE_PRACTICAL
+}
 
 // 节次作息时间模型
 data class TimeSlot(
@@ -153,9 +167,18 @@ fun sectionTimeKey(sectionNumber: Int): String =
         )
     ],
     indices = [
-        Index(value = ["tableId"]),
-        Index(value = ["courseId"]),
-        Index(value = ["semesterId"])
+        Index(
+            value = [
+                "tableId",
+                "semesterId",
+                "courseId",
+                "eventType",
+                "originalWeek",
+                "originalDay",
+                "originalStartSection"
+            ],
+            unique = true
+        )
     ]
 )
 @Serializable
@@ -163,13 +186,14 @@ data class CourseAdjustment(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val tableId: String,
-    val semesterId: String,  // 绑定学期，隔离多学期调课记录
+    val semesterId: String,
     val courseId: String,
+    val eventType: String = COURSE_TYPE_THEORY,
     val originalWeek: Int,
     val originalDay: Int,
     val originalStartSection: Int,
     val originalEndSection: Int,
-    val originalLocation: String = "",  // 原上课地点
+    val originalLocation: String = "",
     val targetWeek: Int,
     val targetDay: Int,
     val targetStartSection: Int,
@@ -209,13 +233,51 @@ data class CourseEventWithMeta(
     val credit: String,
     val category: String,
     val courseType: String,
-    val colorIndex: Int
+    val colorIndex: Int,
+    @androidx.room.Ignore val weeks: List<Int> = emptyList(),
+    @androidx.room.Ignore val isAdjusted: Boolean = false
 ) {
-    @androidx.room.Ignore
-    var weeks: List<Int> = emptyList()
-
-    @androidx.room.Ignore
-    var isAdjusted: Boolean = false
+    // Room 投影专用构造函数
+    @Suppress("unused")
+    constructor(
+        id: Long,
+        courseId: String,
+        tableId: String,
+        week: Int,
+        day: Int,
+        startSection: Int,
+        endSection: Int,
+        location: String,
+        teacher: String,
+        projectName: String,
+        studentCount: Int,
+        courseName: String,
+        courseCode: String,
+        credit: String,
+        category: String,
+        courseType: String,
+        colorIndex: Int
+    ) : this(
+        id = id,
+        courseId = courseId,
+        tableId = tableId,
+        week = week,
+        day = day,
+        startSection = startSection,
+        endSection = endSection,
+        location = location,
+        teacher = teacher,
+        projectName = projectName,
+        studentCount = studentCount,
+        courseName = courseName,
+        courseCode = courseCode,
+        credit = credit,
+        category = category,
+        courseType = courseType,
+        colorIndex = colorIndex,
+        weeks = emptyList(),
+        isAdjusted = false
+    )
 
     val isPractical: Boolean get() = courseType == COURSE_TYPE_PRACTICAL
 
@@ -265,11 +327,35 @@ fun CourseEvent.toMeta(course: Course, weeks: List<Int> = emptyList()): CourseEv
         courseCode = course.courseCode,
         credit = course.credit,
         category = course.category,
-        courseType = course.courseType,
-        colorIndex = course.colorIndex
-    ).apply {
-        this.weeks = weeks
-    }
+        courseType = eventType,
+        colorIndex = course.colorIndex,
+        weeks = weeks
+    )
+}
+
+// 压缩指定事件列表为时段槽位列表
+fun List<CourseEvent>.toCompressedSlots(): List<CompressedCourseSlot> {
+    return this
+        .groupBy { "${it.day}_${it.startSection}_${it.endSection}_${it.location}_${it.teacher}_${it.projectName}" }
+        .map { (_, group) ->
+            val first = group.first()
+            CompressedCourseSlot(
+                day = first.day,
+                startSection = first.startSection,
+                endSection = first.endSection,
+                location = first.location,
+                teacher = first.teacher,
+                weeks = group.map { it.week }.filter { it > 0 }.distinct().sorted(),
+                projectName = first.projectName,
+                studentCount = first.studentCount
+            )
+        }
+        .sortedWith(
+            compareBy<CompressedCourseSlot> { it.day }
+                .thenBy { sectionTimeKey(it.startSection) }
+                .thenBy { it.weeks.minOrNull() ?: 0 }
+                .thenBy { it.projectName }
+        )
 }
 
 // 课程及关联事件模型
@@ -281,30 +367,8 @@ data class CourseWithEvents(
     )
     val events: List<CourseEvent> = emptyList()
 ) {
-    // 压缩事件为时段槽位列表
-    fun toCompressedSlots(): List<CompressedCourseSlot> {
-        return events
-            .groupBy { "${it.day}_${it.startSection}_${it.endSection}_${it.location}_${it.teacher}_${it.projectName}" }
-            .map { (_, group) ->
-                val first = group.first()
-                CompressedCourseSlot(
-                    day = first.day,
-                    startSection = first.startSection,
-                    endSection = first.endSection,
-                    location = first.location,
-                    teacher = first.teacher,
-                    weeks = group.map { it.week }.filter { it > 0 }.distinct().sorted(),
-                    projectName = first.projectName,
-                    studentCount = first.studentCount
-                )
-            }
-            .sortedWith(
-                compareBy<CompressedCourseSlot> { it.day }
-                    .thenBy { sectionTimeKey(it.startSection) }
-                    .thenBy { it.weeks.minOrNull() ?: 0 }
-                    .thenBy { it.projectName }
-            )
-    }
+    // 压缩全部事件为时段槽位列表
+    fun toCompressedSlots(): List<CompressedCourseSlot> = events.toCompressedSlots()
 }
 
 // 课程时段槽位模型
@@ -423,11 +487,9 @@ fun buildScheduleGridCells(
     return cellList.sortedWith(compareBy({ it.day }, { it.startSection }))
 }
 
-// 按考试统一标识取配色编号
+// 按考试所属课程 ID 取配色编号
 fun resolveExamColorIndex(exam: ExamRecord, colorIndexByCourseId: Map<String, Int>): Int {
-    return exam.courseId?.let { colorIndexByCourseId[it] }
-        ?: colorIndexByCourseId[courseUnifiedCode(exam.courseCode)]
-        ?: 0
+    return exam.courseId?.let { colorIndexByCourseId[it] } ?: 0
 }
 
 // 今日课程项模型
@@ -621,14 +683,29 @@ object SemesterDateHelper {
         }
     }
 
-    // 计算指定日期所属周次
+    // 计算指定日期在学期内的真实周次（开学前或结课后返回 null，用于闹钟/小组件假期判定）
+    fun calculateRawWeekNumber(
+        startDate: LocalDate = calculateDefaultStartDate(),
+        targetDate: LocalDate = LocalDate.now(),
+        totalWeeks: Int = 20
+    ): Int? {
+        val startMonday = startDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val targetMonday = targetDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val daysDiff = ChronoUnit.DAYS.between(startMonday, targetMonday)
+        if (daysDiff < 0) return null
+        val week = (daysDiff / 7).toInt() + 1
+        return if (week in 1..totalWeeks) week else null
+    }
+
+    // 计算指定日期所属周次（UI 展示专用，超出范围时钳制在 1..totalWeeks）
     fun calculateWeekNumber(
         startDate: LocalDate = calculateDefaultStartDate(),
         targetDate: LocalDate = LocalDate.now(),
         totalWeeks: Int = 20
     ): Int {
-        val thisMonday = targetDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-        val daysDiff = ChronoUnit.DAYS.between(startDate, thisMonday)
+        val startMonday = startDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val targetMonday = targetDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+        val daysDiff = ChronoUnit.DAYS.between(startMonday, targetMonday)
         val week = if (daysDiff >= 0) (daysDiff / 7).toInt() + 1 else 1
         return week.coerceIn(1, totalWeeks)
     }

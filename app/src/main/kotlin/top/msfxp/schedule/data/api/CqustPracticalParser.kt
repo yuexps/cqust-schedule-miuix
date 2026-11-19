@@ -5,6 +5,7 @@ import io.ktor.http.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import top.msfxp.schedule.data.model.requireBaseCourseCode
 import java.net.URLEncoder
 
 // 原始实践实验排课条目模型
@@ -277,6 +278,7 @@ object CqustPracticalParser {
             val code = courseCodeMap[courseName]
                 ?: courseCodeMap[courseName.replace(Regex("""^[（(].*?[）)]"""), "").trim()]
                 ?: ""
+            requireBaseCourseCode(code, "实践课:$courseName")
 
             list.add(
                 RawPracticalItem(

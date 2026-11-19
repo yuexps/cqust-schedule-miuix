@@ -6,6 +6,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import top.msfxp.schedule.data.model.Semester
 import top.msfxp.schedule.data.model.StudentProfile
+import top.msfxp.schedule.data.model.requireBaseCourseCode
 
 // 原始教务课程排课条目模型
 data class RawEamsCourse(
@@ -141,6 +142,12 @@ object CqustEamsParser {
                 profile = profile,
                 semesters = semesterList,
                 courses = finalCourses
+            )
+        } catch (e: IllegalStateException) {
+            EamsFetchResult(
+                success = false,
+                errorMessage = "教务课表校验失败: ${e.message}",
+                isNetworkError = false
             )
         } catch (e: Exception) {
             EamsFetchResult(
@@ -339,6 +346,7 @@ object CqustEamsParser {
                     val courseCode = codeInName.ifEmpty {
                         codeRegex.find(args[2])?.groupValues?.get(1).orEmpty()
                     }
+                    requireBaseCourseCode(courseCode, "理论课:$name")
                     val room = args[5]
                     val weeks = parseWeekBits(args[6])
 
@@ -429,6 +437,7 @@ object CqustEamsParser {
                 .toList()
 
             if (tds.size >= 7 && tds[0].toIntOrNull() != null) {
+                requireBaseCourseCode(tds[1], "未排课:${tds[2]}")
                 val weekText = tds[6]
                 result.add(
                     RawEamsCourse(

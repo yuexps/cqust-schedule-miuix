@@ -1,11 +1,11 @@
 package top.msfxp.schedule.data.api
 
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import top.msfxp.schedule.data.model.COURSE_TYPE_PRACTICAL
-import top.msfxp.schedule.data.model.COURSE_TYPE_THEORY
+import top.msfxp.schedule.data.db.ScheduleDatabase
 import top.msfxp.schedule.data.model.Course
 import top.msfxp.schedule.data.model.EXAM_TYPE_DEFAULT
 import top.msfxp.schedule.data.model.ExamFetchResult
@@ -13,14 +13,13 @@ import top.msfxp.schedule.data.model.ExamRecord
 import top.msfxp.schedule.data.model.RawExamItem
 import top.msfxp.schedule.data.model.Semester
 import top.msfxp.schedule.data.model.StudentProfile
+import top.msfxp.schedule.data.model.buildCourseId
 import top.msfxp.schedule.data.model.buildExamRecordId
-import top.msfxp.schedule.data.model.courseUnifiedCode
 import top.msfxp.schedule.data.model.effectiveStartDate
-import top.msfxp.schedule.data.model.unifiedCode
+import top.msfxp.schedule.data.model.requireBaseCourseCode
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
-import top.msfxp.schedule.util.CourseLocationFormatter
 
 // 同步结果统计数据模型
 data class SyncResultSummary(
@@ -35,11 +34,13 @@ data class SyncResultSummary(
 private data class ScheduleFetchBundle(
     val eamsResult: EamsFetchResult,
     val practicalItems: List<RawPracticalItem>,
+    val practicalError: String? = null,
     val examResult: ExamFetchResult? = null
 )
 
 // 课表数据同步服务协调器
 class CqustSyncManager(
+    private val database: ScheduleDatabase,
     private val settingsRepository: SettingsRepository,
     private val scheduleRepository: ScheduleRepository,
     private val examRepository: ExamRepository
@@ -75,37 +76,63 @@ class CqustSyncManager(
         if (!eamsResult.success) {
             return@withContext Result.failure(Exception(eamsResult.errorMessage ?: "教务课表解析失败"))
         }
+        if (fetchBundle.practicalError != null) {
+            return@withContext Result.failure(Exception(fetchBundle.practicalError))
+        }
+        val examRes = fetchBundle.examResult
+        if (examRes != null && !examRes.success && examRes.errorMessage?.contains("缺少课程代码") == true) {
+            return@withContext Result.failure(Exception(examRes.errorMessage))
+        }
         if (!allowEmpty && eamsResult.courses.isEmpty()) {
             return@withContext Result.failure(Exception("返回课程数为 0，不覆盖本地课表"))
         }
 
-        // 3. 构建时空原子矩阵
+        val semesterId = eamsResult.semesterId?.ifBlank { null }
+            ?: eamsResult.semesters.firstOrNull()?.id.orEmpty()
+        if (semesterId.isBlank()) {
+            return@withContext Result.failure(Exception("未能确定当前学期标识，同步已终止"))
+        }
+
+        // 3. 构建时空原子矩阵（继承该学期已有课程配色）
         val tableId = scheduleRepository.getOrCreateDefaultTableId()
-        val (courses, events) = ScheduleMatrixBuilder.build(
+        val existingColorMap = scheduleRepository.getCourseColorMap(tableId, semesterId)
+        val buildResult = ScheduleMatrixBuilder.build(
             tableId = tableId,
+            semesterId = semesterId,
             eamsCourses = eamsResult.courses,
-            practicalItems = practicalItems
+            practicalItems = practicalItems,
+            existingColorMap = existingColorMap
         )
 
-        // 4. 持久化存储（入库后由 CourseAlarmObserver 统一响应式触发日历同步）
+        // 4. 单事务原子持久化
         try {
-            scheduleRepository.saveSchedule(tableId, courses, events)
-            saveSemesters(eamsResult)
-            persistProfileAndCredentials(sid, pwd, eamsResult.profile)
-            val examCount = saveExams(
+            val semesterEntities = buildSemesterEntities(eamsResult, semesterId)
+            val examRecords = buildExamRecords(
                 result = fetchBundle.examResult,
                 tableId = tableId,
-                semesterId = eamsResult.semesterId.orEmpty(),
-                courses = courses
+                semesterId = semesterId,
+                courses = buildResult.courses
             )
 
-            val regularCount = courses.count { it.courseType == COURSE_TYPE_THEORY }
-            val practicalCount = courses.count { it.courseType == COURSE_TYPE_PRACTICAL }
+            database.withTransaction {
+                scheduleRepository.saveSemesterSchedule(
+                    tableId = tableId,
+                    semesterId = semesterId,
+                    courses = buildResult.courses,
+                    events = buildResult.events
+                )
+                scheduleRepository.replaceSemesters(semesterEntities, semesterId)
+                if (examRecords != null) {
+                    examRepository.replaceSemesterExams(tableId, semesterId, examRecords)
+                }
+            }
+            persistProfileAndCredentials(sid, pwd, eamsResult.profile)
+
             Result.success(
                 SyncResultSummary(
-                    regularCount = regularCount,
-                    practicalCount = practicalCount,
-                    examCount = examCount
+                    regularCount = buildResult.theoryCourseCount,
+                    practicalCount = buildResult.practicalCourseCount,
+                    examCount = examRecords?.size ?: 0
                 )
             )
         } catch (e: Exception) {
@@ -152,8 +179,11 @@ class CqustSyncManager(
         }
 
         var practicalItems = emptyList<RawPracticalItem>()
+        var practicalError: String? = null
         if (practicalResult != null && practicalResult.success) {
             practicalItems = practicalResult.items
+        } else if (practicalResult != null && practicalResult.errorMessage?.contains("缺少课程代码") == true) {
+            practicalError = practicalResult.errorMessage
         } else if (targetSemesterId != null) {
             val semesterId = eamsResult.semesterId ?: eamsResult.semesters.firstOrNull()?.id.orEmpty()
             val semInfo = eamsResult.semesters.find { it.id == semesterId } ?: eamsResult.semesters.firstOrNull()
@@ -161,29 +191,34 @@ class CqustSyncManager(
 
             onProgress?.invoke("正在获取学期实践课表")
             val termResult = CqustPracticalParser.fetchAndParse(session, studentId, practicalTerm)
-            if (termResult.success && termResult.items.isNotEmpty()) {
+            if (termResult.success) {
                 practicalItems = termResult.items
+            } else if (termResult.errorMessage?.contains("缺少课程代码") == true) {
+                practicalError = termResult.errorMessage
             }
         }
 
-        return ScheduleFetchBundle(eamsResult, practicalItems, examResult)
+        return ScheduleFetchBundle(eamsResult, practicalItems, practicalError, examResult)
     }
 
-    // 保存考试记录并匹配课程归属
-    private suspend fun saveExams(
+    // 构建考试记录实体并绑定唯一课程主键
+    private fun buildExamRecords(
         result: ExamFetchResult?,
         tableId: String,
         semesterId: String,
         courses: List<Course>
-    ): Int {
-        if (result == null || !result.success || semesterId.isBlank()) return 0
+    ): List<ExamRecord>? {
+        if (result == null || !result.success || semesterId.isBlank()) return null
         val now = System.currentTimeMillis()
-        val records = result.items.map { item ->
+        val courseIds = courses.map { it.id }.toSet()
+        return result.items.map { item ->
+            val baseCode = requireBaseCourseCode(item.courseCode, "考试:${item.courseName}")
+            val candidateCourseId = buildCourseId(tableId, semesterId, baseCode)
             ExamRecord(
                 id = buildExamRecordId(tableId, semesterId, item),
                 tableId = tableId,
                 semesterId = semesterId,
-                courseId = matchCourseId(item, courses),
+                courseId = if (candidateCourseId in courseIds) candidateCourseId else null,
                 examType = item.examType.ifBlank { EXAM_TYPE_DEFAULT },
                 sequence = item.sequence,
                 courseCode = item.courseCode,
@@ -193,7 +228,7 @@ class CqustSyncManager(
                 weekday = item.weekday,
                 startTime = item.startTime,
                 endTime = item.endTime,
-                position = item.position?.let { CourseLocationFormatter.format(it) },
+                position = item.position?.trim()?.ifBlank { null },
                 seatNo = item.seatNo,
                 status = item.status,
                 remark = item.remark,
@@ -201,26 +236,13 @@ class CqustSyncManager(
                 updatedAt = now
             )
         }
-        examRepository.replaceSemesterExams(tableId, semesterId, records)
-        return records.size
     }
 
-    // 按课程统一标识匹配考试所属课程
-    private fun matchCourseId(item: RawExamItem, courses: List<Course>): String? {
-        val unifiedCode = courseUnifiedCode(item.courseCode)
-        return courses
-            .filter { it.courseType == COURSE_TYPE_THEORY }
-            .firstOrNull { it.unifiedCode == unifiedCode }
-            ?.id
-            ?: courses
-                .filter { it.courseType == COURSE_TYPE_PRACTICAL }
-                .firstOrNull { it.unifiedCode == unifiedCode }
-                ?.id
-    }
-
-    // 保存学期列表至本地数据库
-    private suspend fun saveSemesters(eamsResult: EamsFetchResult) {
-        val semesterId = eamsResult.semesterId ?: eamsResult.semesters.firstOrNull()?.id.orEmpty()
+    // 构建学期实体列表（保留已有开学日期与总周数配置）
+    private suspend fun buildSemesterEntities(
+        eamsResult: EamsFetchResult,
+        activeSemesterId: String
+    ): List<Semester> {
         val semesterEntities = mutableListOf<Semester>()
         for (semInfo in eamsResult.semesters) {
             val existing = scheduleRepository.getSemesterById(semInfo.id)
@@ -235,13 +257,11 @@ class CqustSyncManager(
                     label = semInfo.label,
                     startDate = startDate,
                     totalWeeks = existing?.totalWeeks ?: 20,
-                    isCurrent = (semInfo.id == semesterId)
+                    isCurrent = (semInfo.id == activeSemesterId)
                 )
             )
         }
-        scheduleRepository.clearSemesters()
-        scheduleRepository.saveSemesters(semesterEntities)
-        scheduleRepository.setActiveSemester(semesterId)
+        return semesterEntities
     }
 
     // 加密持久化档案与凭证
@@ -336,8 +356,8 @@ object LocalCrypto {
             System.arraycopy(cipherText, 0, combined, iv.size, cipherText.size)
             android.util.Base64.encodeToString(combined, android.util.Base64.NO_WRAP)
         } catch (e: Exception) {
-            android.util.Log.e("LocalCrypto", "KeyStore encryption failed, fallback to raw", e)
-            rawText
+            android.util.Log.e("LocalCrypto", "KeyStore encryption failed", e)
+            throw IllegalStateException("本地凭证加密失败", e)
         }
     }
 

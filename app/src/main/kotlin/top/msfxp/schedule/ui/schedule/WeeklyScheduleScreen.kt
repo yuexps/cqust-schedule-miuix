@@ -117,13 +117,6 @@ fun WeeklyScheduleScreen(
     var selectedCell by remember { mutableStateOf<ScheduleGridCell?>(null) }
     val adjustmentsList by viewModel.adjustmentsListFlow.collectAsState()
 
-    val wallpaperBitmap by viewModel.wallpaperBitmapFlow.collectAsState()
-    val wallpaperAlpha by animateFloatAsState(
-        targetValue = if (wallpaperBitmap != null && uiState.hasCustomWallpaper) 1f else 0f,
-        animationSpec = tween(durationMillis = 200),
-        label = "wallpaper_fade"
-    )
-
     Scaffold(
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         modifier = Modifier.fillMaxSize()
@@ -132,22 +125,11 @@ fun WeeklyScheduleScreen(
             modifier = Modifier.fillMaxSize()
         ) {
             // 背景壁纸与暗度遮罩
-            val currentWallpaper = wallpaperBitmap
-            if (currentWallpaper != null && wallpaperAlpha > 0f) {
-                Image(
-                    bitmap = currentWallpaper,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = wallpaperAlpha },
-                    contentScale = ContentScale.Crop
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = uiState.wallpaperMaskDim * wallpaperAlpha))
-                )
-            }
+            ScheduleWallpaperBackground(
+                wallpaperBitmapFlow = viewModel.wallpaperBitmapFlow,
+                hasCustomWallpaper = uiState.hasCustomWallpaper,
+                wallpaperMaskDim = uiState.wallpaperMaskDim
+            )
 
             Column(
                 modifier = Modifier
@@ -341,7 +323,7 @@ fun WeeklyScheduleScreen(
                 cell.copy(
                     courses = cell.courses.map { ev ->
                         if (ev.courseId == courseId) {
-                            ev.copy(colorIndex = newIndex).apply { this.weeks = ev.weeks }
+                            ev.copy(colorIndex = newIndex)
                         } else ev
                     }
                 )
@@ -366,8 +348,8 @@ fun WeeklyScheduleScreen(
         onClearAllAdjustments = {
             viewModel.clearAllAdjustments()
         },
-        onGetAdjustmentForEvent = { cId, w, d, s ->
-            viewModel.getAdjustmentForEvent(cId, w, d, s)
+        onGetAdjustmentForEvent = { cId, eventType, w, d, s ->
+            viewModel.getAdjustmentForEvent(cId, eventType, w, d, s)
         },
         getCourseAtSlot = { w, d, s, e, excludeCourseId, excludeStartSection ->
             viewModel.getCourseAtSlot(
@@ -443,5 +425,36 @@ fun WeeklyScheduleScreen(
                 }
             }
         }
+    }
+}
+
+// 课表背景壁纸层
+@Composable
+private fun ScheduleWallpaperBackground(
+    wallpaperBitmapFlow: kotlinx.coroutines.flow.StateFlow<androidx.compose.ui.graphics.ImageBitmap?>,
+    hasCustomWallpaper: Boolean,
+    wallpaperMaskDim: Float
+) {
+    val wallpaperBitmap by wallpaperBitmapFlow.collectAsState()
+    val wallpaperAlpha by animateFloatAsState(
+        targetValue = if (wallpaperBitmap != null && hasCustomWallpaper) 1f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "wallpaper_fade"
+    )
+    val currentWallpaper = wallpaperBitmap
+    if (currentWallpaper != null && wallpaperAlpha > 0f) {
+        Image(
+            bitmap = currentWallpaper,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = wallpaperAlpha },
+            contentScale = ContentScale.Crop
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = wallpaperMaskDim * wallpaperAlpha))
+        )
     }
 }

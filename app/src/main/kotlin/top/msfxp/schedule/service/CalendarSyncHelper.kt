@@ -64,7 +64,7 @@ class CalendarSyncHelper(
                 val semesterStartDate = currentSemester.effectiveStartDate
 
                 val tableId = scheduleRepository.getOrCreateDefaultTableId()
-                val events = scheduleRepository.getAllEventsForTable(tableId)
+                val events = scheduleRepository.getAllEventsForSemester(tableId, currentSemester.id)
 
                 val calendarId = getOrCreateCalendarId()
                 if (calendarId == -1L) return@withLock false
@@ -78,7 +78,12 @@ class CalendarSyncHelper(
                 for (w in 1..totalWeeks) {
                     // 仅纳入有作息的课程事件，待安排项不写入日历
                     val weekRawEvents = events.filter { it.week == w && it.day in 1..7 && it.startSection != 0 }
-                    val weekAdjustedEvents = top.msfxp.schedule.data.repository.applyAdjustmentsToWeekEvents(weekRawEvents, adjustments, w, events)
+                    val weekAdjustedEvents = top.msfxp.schedule.domain.EffectiveScheduleResolver.resolveWeekEvents(
+                        rawWeekEvents = weekRawEvents,
+                        adjustments = adjustments,
+                        weekNumber = w,
+                        allEvents = events
+                    )
 
                     weekAdjustedEvents.forEach { ev ->
                         val startSlot = findSectionTimeSlot(ev.startSection)
@@ -168,7 +173,8 @@ class CalendarSyncHelper(
             context.getString(R.string.calendar_exam_location_format, exam.displayPosition, seat)
         } ?: exam.displayPosition
         val description = buildString {
-            append(context.getString(R.string.calendar_exam_desc_type_format, context.getString(R.string.exam_type_label)))
+            val batchType = exam.examType.ifBlank { context.getString(R.string.exam_type_label) }
+            append(context.getString(R.string.calendar_exam_desc_type_format, batchType))
             if (!exam.status.isNullOrBlank()) {
                 append("\n").append(context.getString(R.string.calendar_exam_desc_status_format, exam.status))
             }

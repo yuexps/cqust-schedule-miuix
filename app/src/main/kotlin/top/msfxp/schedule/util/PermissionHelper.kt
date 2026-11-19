@@ -19,9 +19,16 @@ import androidx.core.content.ContextCompat
 object PermissionHelper {
     private const val TAG = "PermissionHelper"
 
-    // 检测通知权限
+    // 检测通知权限（Android 13+ 同步校验运行时 POST_NOTIFICATIONS 与系统通知总开关）
     fun isNotificationGranted(context: Context): Boolean {
-        return NotificationManagerCompat.from(context).areNotificationsEnabled()
+        val systemEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        if (!systemEnabled) return false
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
     }
 
     // 检测精确闹钟权限
