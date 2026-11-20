@@ -9,8 +9,28 @@ targets:
     platform: iOS
     sources:
       - path: iosApp
+    # Info.plist 由 XcodeGen 依据 properties 全量生成，不可手改 iosApp/Info.plist
     info:
       path: iosApp/Info.plist
+      properties:
+        CFBundleDevelopmentRegion: zh_CN
+        CFBundleDisplayName: 重科课表
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        # Compose Multiplatform iOS 渲染要求，缺失会在启动时触发 PlistSanityCheck 崩溃
+        CADisableMinimumFrameDurationOnPhone: true
+        LSApplicationQueriesSchemes:
+          - iosamap
+          - baidumap
+          - qqmap
+          - mqqapi
+        NSPhotoLibraryUsageDescription: 用于选取相册图片作为课表壁纸
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIRequiredDeviceCapabilities:
+          - arm64
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: top.msfxp.schedule.ios

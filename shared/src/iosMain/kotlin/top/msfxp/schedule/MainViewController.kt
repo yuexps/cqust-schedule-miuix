@@ -15,10 +15,12 @@ import top.msfxp.schedule.platform.PlatformSubScreens
 import top.msfxp.schedule.platform.iosModule
 import top.msfxp.schedule.ui.IosPersonalizationScreen
 import top.msfxp.schedule.ui.IosPreClassReminderScreen
+import top.msfxp.schedule.util.iosCoroutineExceptionHandler
 import top.msfxp.schedule.util.ioDispatcher
 
 private var isIosInitialized = false
-private val iosLifecycleScope = CoroutineScope(SupervisorJob() + ioDispatcher)
+private val iosLifecycleScope =
+    CoroutineScope(SupervisorJob() + iosCoroutineExceptionHandler + ioDispatcher)
 
 // 初始化 iOS 端 Koin 依赖注入与平台服务注册
 fun initIosDependencies() {

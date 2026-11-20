@@ -14,7 +14,7 @@
 | [gradle/libs.versions.toml](../gradle/libs.versions.toml) | 统一版本目录与第三方库版本管理 |
 | [shared/](../shared) | **KMP 共享核心模块**（`commonMain` 共享业务/数据/UI + `androidMain` + `iosMain`） |
 | [app/](../app) | **Android 宿主与系统服务模块**（Application/Activity、前台静音服务、日历同步、闹钟、桌面微件） |
-| [iosApp/](../iosApp) | **iOS SwiftUI 宿主工程**（承载 `ComposeApp` Framework 的 `MainViewController`） |
+| [iosApp/](../iosApp) | **iOS SwiftUI 宿主工程**（承载 `ComposeApp` Framework 的 `MainViewController`；Xcode 工程与 `Info.plist` 均由 `project.yml` 经 XcodeGen 生成，禁止手改） |
 
 ---
 

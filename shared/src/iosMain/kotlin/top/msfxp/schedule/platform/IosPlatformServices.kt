@@ -55,6 +55,7 @@ import top.msfxp.schedule.di.commonModule
 import top.msfxp.schedule.domain.EffectiveScheduleResolver
 import top.msfxp.schedule.util.atTimeEpochMillis
 import top.msfxp.schedule.util.currentEpochMillis
+import top.msfxp.schedule.util.iosCoroutineExceptionHandler
 import top.msfxp.schedule.util.isoDayOfWeekNumber
 import top.msfxp.schedule.util.plusDays
 import top.msfxp.schedule.util.todayLocalDate
@@ -166,7 +167,7 @@ class IosNotificationScheduler(
     private val examRepository: ExamRepository
 ) : PlatformAutomationTester {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + iosCoroutineExceptionHandler + Dispatchers.IO)
 
     fun startObserving() {
         scope.launch {
@@ -191,7 +192,8 @@ class IosNotificationScheduler(
         val center = UNUserNotificationCenter.currentNotificationCenter()
         val options = UNAuthorizationOptionAlert or UNAuthorizationOptionSound or UNAuthorizationOptionBadge
         center.requestAuthorizationWithOptions(options) { granted, _ ->
-            onResult?.invoke(granted)
+            // 系统回调线程中抛异常会直接终止进程
+            runCatching { onResult?.invoke(granted) }
         }
     }
 

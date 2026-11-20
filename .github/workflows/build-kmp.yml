@@ -109,7 +109,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Verify Compose Resources & Package Release IPA
+      - name: Verify Info.plist & Compose Resources, Package Release IPA
         run: |
           APP_PATH=$(find iosApp/build/Build/Products/Release-iphoneos -name "CqustSchedule.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
@@ -119,6 +119,18 @@ jobs:
           if [ ! -d "$APP_PATH/compose-resources" ]; then
             echo "Error: compose-resources missing in $APP_PATH (will crash on launch)"
             ls -la "$APP_PATH"
+            exit 1
+          fi
+          # Compose UIKit 启动时会校验该项，缺失即 abort 崩溃
+          if [ "$(/usr/libexec/PlistBuddy -c 'Print :CADisableMinimumFrameDurationOnPhone' "$APP_PATH/Info.plist" 2>/dev/null)" != "true" ]; then
+            echo "Error: Info.plist 缺少 CADisableMinimumFrameDurationOnPhone=true (will crash on launch)"
+            /usr/libexec/PlistBuddy -c 'Print' "$APP_PATH/Info.plist"
+            exit 1
+          fi
+          EXPECTED_VERSION=$(sed -nE 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*"?([^"]+)"?$/\1/p' iosApp/project.yml | head -n 1)
+          ACTUAL_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Info.plist")
+          if [ "$EXPECTED_VERSION" != "$ACTUAL_VERSION" ]; then
+            echo "Error: Info.plist 版本 ($ACTUAL_VERSION) 与 project.yml ($EXPECTED_VERSION) 不一致"
             exit 1
           fi
           mkdir -p build_ipa/Payload

@@ -21,3 +21,8 @@ test_cqust_full.js
 *.jks
 *.keystore
 keystore.properties
+
+# XcodeGen 生成产物
+/iosApp/iosApp.xcodeproj/
+/iosApp/iosApp/Info.plist
+/iosApp/build/

@@ -12,15 +12,28 @@ import platform.UIKit.UIImagePickerControllerDelegateProtocol
 import platform.UIKit.UIImagePickerControllerOriginalImage
 import platform.UIKit.UINavigationControllerDelegateProtocol
 import platform.UIKit.UIViewController
+import platform.UIKit.UIWindow
+import platform.UIKit.UIWindowScene
 import platform.darwin.NSObject
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
 import platform.posix.memcpy
 
 // 保持选图代理存活，避免 UIKit 弱引用导致回调丢失
 private var activePickerDelegate: NSObject? = null
 
 // 调起 iOS 相册选图，返回 JPEG 字节（取消或失败返回 null）
-@OptIn(ExperimentalForeignApi::class)
 fun launchIosImagePicker(onResult: (ByteArray?) -> Unit) {
+    // UIKit 展示必须在主线程执行
+    dispatch_async(dispatch_get_main_queue()) {
+        presentImagePicker(onResult)
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
+private fun presentImagePicker(onResult: (ByteArray?) -> Unit) {
+    // 已有选择器在展示时不再重复调起，避免 UIKit 转场冲突崩溃
+    if (activePickerDelegate != null) return
     val presenter = resolveTopViewController()
     if (presenter == null) {
         onResult(null)
@@ -36,12 +49,15 @@ fun launchIosImagePicker(onResult: (ByteArray?) -> Unit) {
     presenter.presentViewController(picker, animated = true, completion = null)
 }
 
-// 定位当前最上层视图控制器
-@Suppress("DEPRECATION")
+// 定位当前窗口上的最上层视图控制器
 private fun resolveTopViewController(): UIViewController? {
-    var current = UIApplication.sharedApplication.keyWindow?.rootViewController
-    while (current?.presentedViewController != null) {
-        current = current.presentedViewController
+    val windows = UIApplication.sharedApplication.connectedScenes
+        .filterIsInstance<UIWindowScene>()
+        .flatMap { scene -> scene.windows.filterIsInstance<UIWindow>() }
+    var current = (windows.firstOrNull { it.keyWindow } ?: windows.firstOrNull())
+        ?.rootViewController ?: return null
+    while (current.presentedViewController != null) {
+        current = current.presentedViewController ?: return current
     }
     return current
 }

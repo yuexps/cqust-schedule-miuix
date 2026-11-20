@@ -148,7 +148,8 @@ private object IosPlatformAesCipher : PlatformAesCipher {
                 check(statusFinal == kCCSuccess) { "AES-CFB final failed: $statusFinal" }
                 return outBuf.copyOf(offset + moved2.value.toInt())
             } finally {
-                CCCryptorRelease(cryptorRef.value)
+                // 创建失败时 cryptorRef 为空，避免空指针释放
+                cryptorRef.value?.let { CCCryptorRelease(it) }
             }
         }
     }
