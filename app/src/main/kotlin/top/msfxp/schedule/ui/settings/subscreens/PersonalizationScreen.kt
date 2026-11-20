@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.msfxp.schedule.R
@@ -316,14 +317,20 @@ fun PersonalizationScreen(
 
     // 壁纸区域框选器弹窗
     croppingBitmap?.let { cropSrc ->
+        val cropImage = remember(cropSrc) { cropSrc.asImageBitmap() }
         WallpaperCropDialog(
-            sourceBitmap = cropSrc,
-            onConfirm = { cropped ->
-                viewModel.applyCroppedWallpaper(cropped)
+            sourceImage = cropImage,
+            onConfirm = { region ->
+                viewModel.applyCroppedWallpaper(cropSrc, region)
             },
             onDismissRequest = {
                 viewModel.cancelCropping()
-            }
+            },
+            // Android 需将弹窗延展至系统栏四边，避免内容区被裁剪影响取景比例
+            dialogProperties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
         )
     }
 

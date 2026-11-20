@@ -52,6 +52,12 @@ compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 
+# Compose Multiplatform 直接依赖（替代已弃用的 compose.* 访问器）
+compose-runtime-kmp = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+compose-foundation-kmp = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+compose-ui-kmp = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+compose-components-resources-kmp = { module = "org.jetbrains.compose.components:components-resources", version.ref = "composeMultiplatform" }
+
 # Miuix (KMP + Android Components)
 miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui-android", version.ref = "miuix" }
 miuix-preference = { module = "top.yukonga.miuix.kmp:miuix-preference-android", version.ref = "miuix" }

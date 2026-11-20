@@ -30,11 +30,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -48,6 +51,7 @@ import top.msfxp.schedule.platform.PlatformWallpaperStorage
 import top.msfxp.schedule.shared.resources.*
 import top.msfxp.schedule.ui.settings.SettingsViewModel
 import top.msfxp.schedule.ui.settings.subscreens.ColorPickerDialog
+import top.msfxp.schedule.ui.settings.subscreens.WallpaperCropDialog
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
@@ -84,6 +88,8 @@ fun IosPersonalizationScreen(
         mutableFloatStateOf(settings.wallpaperMaskDim)
     }
     var wallpaperTip by remember { mutableStateOf<StringResource?>(null) }
+    var cropSourceBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var cropPreview by remember { mutableStateOf<ImageBitmap?>(null) }
     val hasWallpaper = remember(settings.hasCustomWallpaper) {
         settings.hasCustomWallpaper && wallpaperStorage.hasWallpaperFile()
     }
@@ -157,11 +163,12 @@ fun IosPersonalizationScreen(
                                 launchIosImagePicker { bytes ->
                                     if (bytes == null) return@launchIosImagePicker
                                     scope.launch {
-                                        val isSaved = settingsRepository.saveWallpaperBytes(bytes)
-                                        wallpaperTip = if (isSaved) {
-                                            Res.string.personalization_wallpaper_set_success
+                                        val preview = withContext(Dispatchers.Default) { decodeIosImageBitmap(bytes) }
+                                        if (preview == null) {
+                                            wallpaperTip = Res.string.personalization_wallpaper_set_fail
                                         } else {
-                                            Res.string.personalization_wallpaper_set_fail
+                                            cropSourceBytes = bytes
+                                            cropPreview = preview
                                         }
                                     }
                                 }
@@ -283,6 +290,34 @@ fun IosPersonalizationScreen(
             editingSlotIndex = null
         }
     )
+
+    // 壁纸区域框选
+    val previewImage = cropPreview
+    val sourceBytes = cropSourceBytes
+    if (previewImage != null && sourceBytes != null) {
+        WallpaperCropDialog(
+            sourceImage = previewImage,
+            onConfirm = { region ->
+                cropPreview = null
+                cropSourceBytes = null
+                scope.launch {
+                    val cropped = withContext(Dispatchers.Default) {
+                        cropIosImageToJpegBytes(sourceBytes, region)
+                    }
+                    val saved = cropped != null && settingsRepository.saveWallpaperBytes(cropped)
+                    wallpaperTip = if (saved) {
+                        Res.string.personalization_wallpaper_set_success
+                    } else {
+                        Res.string.personalization_wallpaper_set_fail
+                    }
+                }
+            },
+            onDismissRequest = {
+                cropPreview = null
+                cropSourceBytes = null
+            }
+        )
+    }
 }
 
 // iOS 端课前提醒设置界面（基于 UNUserNotificationCenter）

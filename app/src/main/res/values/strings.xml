@@ -291,7 +291,7 @@
     <string name="personalization_wallpaper_clear_success">已清除课表壁纸</string>
 
     <!-- 壁纸框选器 -->
-    <string name="crop_wallpaper_title">选取显示区域</string>
+
     <string name="crop_wallpaper_loading">正在载入图像…</string>
 
     <!-- 课程编辑二级页面与三级页面 -->

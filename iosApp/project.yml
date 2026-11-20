@@ -24,6 +24,13 @@ targets:
           - baidumap
           - qqmap
           - mqqapi
+        # 教务网关存在 http 回跳，需放行校内域名以兼容 ATS
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            cqust.edu.cn:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
+              NSExceptionRequiresForwardSecrecy: false
         NSPhotoLibraryUsageDescription: 用于选取相册图片作为课表壁纸
         UILaunchScreen: {}
         UIRequiresFullScreen: true
@@ -57,7 +64,8 @@ targets:
           STRIP_INSTALLED_PRODUCT: "YES"
           COPY_PHASE_STRIP: "YES"
           STRIP_STYLE: all
-          DEBUG_INFORMATION_FORMAT: dwarf
+          # 生成 dSYM，供 .ips 崩溃日志符号化（CI 会上传该产物）
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
     preBuildScripts:
       - name: Compile Kotlin Multiplatform Framework
         basedOnDependencyAnalysis: false

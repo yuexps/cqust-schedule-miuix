@@ -12,6 +12,7 @@ import top.msfxp.schedule.platform.IosPlatformExternalHandler
 import top.msfxp.schedule.platform.PlatformExternalActions
 import top.msfxp.schedule.platform.PlatformSubScreenRegistry
 import top.msfxp.schedule.platform.PlatformSubScreens
+import top.msfxp.schedule.platform.installIosNotificationCenterDelegate
 import top.msfxp.schedule.platform.iosModule
 import top.msfxp.schedule.ui.IosPersonalizationScreen
 import top.msfxp.schedule.ui.IosPreClassReminderScreen
@@ -25,17 +26,19 @@ private val iosLifecycleScope =
 // 初始化 iOS 端 Koin 依赖注入与平台服务注册
 fun initIosDependencies() {
     if (isIosInitialized) return
-    isIosInitialized = true
 
     PlatformExternalActions.delegate = IosPlatformExternalHandler
     PlatformSubScreenRegistry.screens = PlatformSubScreens(
         Personalization = { onBack -> IosPersonalizationScreen(onBack = onBack) },
         PreClassReminder = { onBack -> IosPreClassReminderScreen(onBack = onBack) }
     )
+    installIosNotificationCenterDelegate()
 
     startKoin {
         modules(iosModule)
     }
+    // 初始化成功后再置位，避免失败后无法重试
+    isIosInitialized = true
 }
 
 // App 回到前台时续期未来 7 天本地课前与考试提醒

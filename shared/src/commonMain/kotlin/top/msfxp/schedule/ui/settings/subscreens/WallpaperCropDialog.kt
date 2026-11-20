@@ -1,15 +1,28 @@
 package top.msfxp.schedule.ui.settings.subscreens
 
-import android.content.Context
-import android.graphics.Bitmap
-import android.os.Build
-import android.util.DisplayMetrics
-import android.view.WindowManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -18,19 +31,22 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import top.msfxp.schedule.R
+import org.jetbrains.compose.resources.stringResource
+import top.msfxp.schedule.shared.resources.Res
+import top.msfxp.schedule.shared.resources.common_cancel
+import top.msfxp.schedule.shared.resources.common_confirm
+import top.msfxp.schedule.shared.resources.crop_wallpaper_title
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
@@ -41,35 +57,25 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.max
 import kotlin.math.roundToInt
 
-// 课表壁纸区域框选器全屏弹窗
+// 壁纸裁剪区域（相对源图的归一化坐标，取值 0..1）
+data class WallpaperCropRegion(
+    val left: Float,
+    val top: Float,
+    val width: Float,
+    val height: Float
+)
+
+// 课表壁纸区域框选器全屏弹窗（输出归一化裁剪区域，由各平台执行实际裁切）
 @Composable
 fun WallpaperCropDialog(
-    sourceBitmap: Bitmap,
-    onConfirm: (Bitmap) -> Unit,
-    onDismissRequest: () -> Unit
+    sourceImage: ImageBitmap,
+    onConfirm: (WallpaperCropRegion) -> Unit,
+    onDismissRequest: () -> Unit,
+    dialogProperties: DialogProperties = DialogProperties(usePlatformDefaultWidth = false)
 ) {
-    val context = LocalContext.current
-
-    // 计算设备真实的物理屏幕纵横比，确保所见即所得
-    val realScreenRatio = remember(context) {
-        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
-            bounds.width().toFloat() / bounds.height().toFloat()
-        } else {
-            val displayMetrics = DisplayMetrics()
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.getRealMetrics(displayMetrics)
-            displayMetrics.widthPixels.toFloat() / displayMetrics.heightPixels.toFloat()
-        }
-    }
-
     Dialog(
         onDismissRequest = onDismissRequest,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
+        properties = dialogProperties
     ) {
         var triggerConfirm by remember { mutableStateOf<(() -> Unit)?>(null) }
 
@@ -100,18 +106,24 @@ fun WallpaperCropDialog(
                 val safeBottom = availableHeight - bottomNavPx - bottomPaddingPx
                 val workAreaHeight = max(100f, safeBottom - safeTop)
 
-                // 在舒适工作区内按设备物理屏幕真实比例计算尺寸
+                // 裁剪框比例按整窗尺寸计算（含系统栏），保证与壁纸 Cover 显示比例一致
+                val windowSize = LocalWindowInfo.current.containerSize
+                val screenRatio = remember(availableWidth, availableHeight, windowSize) {
+                    val windowWidth = max(windowSize.width.toFloat(), availableWidth)
+                    val windowHeight = max(windowSize.height.toFloat(), availableHeight)
+                    if (windowHeight > 0f) windowWidth / windowHeight else 1f
+                }
                 val maxTargetWidth = availableWidth * 0.82f
                 val maxTargetHeight = workAreaHeight * 0.96f
 
                 val cropWidth: Float
                 val cropHeight: Float
-                if (maxTargetWidth / realScreenRatio <= maxTargetHeight) {
+                if (maxTargetWidth / screenRatio <= maxTargetHeight) {
                     cropWidth = maxTargetWidth
-                    cropHeight = maxTargetWidth / realScreenRatio
+                    cropHeight = maxTargetWidth / screenRatio
                 } else {
                     cropHeight = maxTargetHeight
-                    cropWidth = maxTargetHeight * realScreenRatio
+                    cropWidth = maxTargetHeight * screenRatio
                 }
 
                 // 垂直居中于舒适工作区
@@ -123,8 +135,8 @@ fun WallpaperCropDialog(
                 }
 
                 // 最小填充缩放比：严格保证底图不露白
-                val minScale = remember(sourceBitmap, cropWidth, cropHeight) {
-                    max(cropWidth / sourceBitmap.width.toFloat(), cropHeight / sourceBitmap.height.toFloat())
+                val minScale = remember(sourceImage, cropWidth, cropHeight) {
+                    max(cropWidth / sourceImage.width.toFloat(), cropHeight / sourceImage.height.toFloat())
                 }
 
                 var scale by remember(minScale) { mutableFloatStateOf(minScale) }
@@ -139,8 +151,8 @@ fun WallpaperCropDialog(
 
                 // 手势边界约束计算：保证底图边缘绝不缩入裁剪框内部
                 fun clampOffset(rawOffset: Offset, curScale: Float): Offset {
-                    val imgW = sourceBitmap.width * curScale
-                    val imgH = sourceBitmap.height * curScale
+                    val imgW = sourceImage.width * curScale
+                    val imgH = sourceImage.height * curScale
                     val maxPanX = max(0f, (imgW - cropWidth) / 2f)
                     val maxPanY = max(0f, (imgH - cropHeight) / 2f)
                     return Offset(
@@ -148,8 +160,6 @@ fun WallpaperCropDialog(
                         y = rawOffset.y.coerceIn(-maxPanY, maxPanY)
                     )
                 }
-
-                val composeImageBitmap = remember(sourceBitmap) { sourceBitmap.asImageBitmap() }
 
                 // 手势监听与绘制（边界严密截断）
                 Box(
@@ -170,38 +180,34 @@ fun WallpaperCropDialog(
                             .clipToBounds()
                     ) {
                         // 1. 绘制底层图片（以 cropRect.center 为绝对基准对齐）
-                        val currentImgW = sourceBitmap.width * scale
-                        val currentImgH = sourceBitmap.height * scale
+                        val currentImgW = sourceImage.width * scale
+                        val currentImgH = sourceImage.height * scale
                         val imgLeft = cropRect.center.x - currentImgW / 2f + offset.x
                         val imgTop = cropRect.center.y - currentImgH / 2f + offset.y
 
                         drawImage(
-                            image = composeImageBitmap,
+                            image = sourceImage,
                             dstOffset = IntOffset(imgLeft.roundToInt(), imgTop.roundToInt()),
                             dstSize = IntSize(currentImgW.roundToInt(), currentImgH.roundToInt())
                         )
 
                         // 2. 绘制四周半透明黑色遮罩（紧贴屏幕物理四边，消除一切生硬断层）
                         val scrimColor = Color.Black.copy(alpha = 0.72f)
-                        // 上遮罩：延伸到屏幕最顶端
                         drawRect(
                             color = scrimColor,
                             topLeft = Offset.Zero,
                             size = Size(availableWidth, cropRect.top)
                         )
-                        // 下遮罩：延伸到屏幕最底端
                         drawRect(
                             color = scrimColor,
                             topLeft = Offset(0f, cropRect.bottom),
                             size = Size(availableWidth, availableHeight - cropRect.bottom)
                         )
-                        // 左遮罩：延伸到屏幕最左端
                         drawRect(
                             color = scrimColor,
                             topLeft = Offset(0f, cropRect.top),
                             size = Size(cropRect.left, cropHeight)
                         )
-                        // 右遮罩：延伸到屏幕最右端
                         drawRect(
                             color = scrimColor,
                             topLeft = Offset(cropRect.right, cropRect.top),
@@ -232,40 +238,30 @@ fun WallpaperCropDialog(
                         val cornerStroke = Stroke(width = 3.dp.toPx())
                         val cornerColor = Color.White
 
-                        // 左上角
                         drawLine(cornerColor, Offset(cropRect.left, cropRect.top), Offset(cropRect.left + cornerLen, cropRect.top), strokeWidth = cornerStroke.width)
                         drawLine(cornerColor, Offset(cropRect.left, cropRect.top), Offset(cropRect.left, cropRect.top + cornerLen), strokeWidth = cornerStroke.width)
-                        // 右上角
                         drawLine(cornerColor, Offset(cropRect.right, cropRect.top), Offset(cropRect.right - cornerLen, cropRect.top), strokeWidth = cornerStroke.width)
                         drawLine(cornerColor, Offset(cropRect.right, cropRect.top), Offset(cropRect.right, cropRect.top + cornerLen), strokeWidth = cornerStroke.width)
-                        // 左下角
                         drawLine(cornerColor, Offset(cropRect.left, cropRect.bottom), Offset(cropRect.left + cornerLen, cropRect.bottom), strokeWidth = cornerStroke.width)
                         drawLine(cornerColor, Offset(cropRect.left, cropRect.bottom), Offset(cropRect.left, cropRect.bottom - cornerLen), strokeWidth = cornerStroke.width)
-                        // 右下角
                         drawLine(cornerColor, Offset(cropRect.right, cropRect.bottom), Offset(cropRect.right - cornerLen, cropRect.bottom), strokeWidth = cornerStroke.width)
                         drawLine(cornerColor, Offset(cropRect.right, cropRect.bottom), Offset(cropRect.right, cropRect.bottom - cornerLen), strokeWidth = cornerStroke.width)
                     }
                 }
 
-                // 裁切生成器
+                // 归一化裁剪区域生成器
                 val doCrop: () -> Unit = {
-                    val currentImgW = sourceBitmap.width * scale
-                    val currentImgH = sourceBitmap.height * scale
+                    val currentImgW = sourceImage.width * scale
+                    val currentImgH = sourceImage.height * scale
                     val imgLeft = cropRect.center.x - currentImgW / 2f + offset.x
                     val imgTop = cropRect.center.y - currentImgH / 2f + offset.y
 
-                    val cropLeftOnImg = (cropRect.left - imgLeft) / scale
-                    val cropTopOnImg = (cropRect.top - imgTop) / scale
-                    val cropWOnImg = cropWidth / scale
-                    val cropHOnImg = cropHeight / scale
+                    val left = ((cropRect.left - imgLeft) / scale / sourceImage.width).coerceIn(0f, 1f)
+                    val top = ((cropRect.top - imgTop) / scale / sourceImage.height).coerceIn(0f, 1f)
+                    val width = (cropWidth / scale / sourceImage.width).coerceIn(0f, 1f - left)
+                    val height = (cropHeight / scale / sourceImage.height).coerceIn(0f, 1f - top)
 
-                    val srcX = cropLeftOnImg.roundToInt().coerceIn(0, sourceBitmap.width - 1)
-                    val srcY = cropTopOnImg.roundToInt().coerceIn(0, sourceBitmap.height - 1)
-                    val srcW = cropWOnImg.roundToInt().coerceIn(1, sourceBitmap.width - srcX)
-                    val srcH = cropHOnImg.roundToInt().coerceIn(1, sourceBitmap.height - srcY)
-
-                    val cropped = Bitmap.createBitmap(sourceBitmap, srcX, srcY, srcW, srcH)
-                    onConfirm(cropped)
+                    onConfirm(WallpaperCropRegion(left = left, top = top, width = width, height = height))
                 }
 
                 DisposableEffect(doCrop) {
@@ -300,13 +296,13 @@ fun WallpaperCropDialog(
                     IconButton(onClick = onDismissRequest) {
                         Icon(
                             imageVector = MiuixIcons.Basic.Close,
-                            contentDescription = stringResource(R.string.common_cancel),
+                            contentDescription = stringResource(Res.string.common_cancel),
                             tint = Color.White
                         )
                     }
 
                     Text(
-                        text = stringResource(R.string.crop_wallpaper_title),
+                        text = stringResource(Res.string.crop_wallpaper_title),
                         style = MiuixTheme.textStyles.title3.copy(fontWeight = FontWeight.Bold),
                         color = Color.White
                     )
@@ -314,7 +310,7 @@ fun WallpaperCropDialog(
                     IconButton(onClick = { triggerConfirm?.invoke() }) {
                         Icon(
                             imageVector = MiuixIcons.Basic.Check,
-                            contentDescription = stringResource(R.string.common_confirm),
+                            contentDescription = stringResource(Res.string.common_confirm),
                             tint = MiuixTheme.colorScheme.primary
                         )
                     }

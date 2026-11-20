@@ -37,11 +37,18 @@ import platform.UserNotifications.UNAuthorizationOptionBadge
 import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNCalendarNotificationTrigger
 import platform.UserNotifications.UNMutableNotificationContent
+import platform.UserNotifications.UNNotification
+import platform.UserNotifications.UNNotificationPresentationOptionBanner
+import platform.UserNotifications.UNNotificationPresentationOptionList
+import platform.UserNotifications.UNNotificationPresentationOptionSound
+import platform.UserNotifications.UNNotificationPresentationOptions
 import platform.UserNotifications.UNNotificationRequest
 import platform.UserNotifications.UNNotificationSound
 import platform.UserNotifications.UNTimeIntervalNotificationTrigger
 import platform.UserNotifications.UNUserNotificationCenter
+import platform.UserNotifications.UNUserNotificationCenterDelegateProtocol
 import platform.Foundation.NSDateComponents
+import platform.darwin.NSObject
 import platform.posix.memcpy
 import top.msfxp.schedule.data.api.AppRelease
 import top.msfxp.schedule.data.db.ScheduleDatabase
@@ -159,6 +166,26 @@ object IosPlatformReleaseInstaller : PlatformReleaseInstaller {
         if (opened) onNotify("已在浏览器打开新版本页面")
         return opened
     }
+}
+
+// 前台通知展示代理：App 在前台时仍弹出横幅与声音（系统弱引用代理，故由单例持有）
+private object IosForegroundNotificationDelegate : NSObject(), UNUserNotificationCenterDelegateProtocol {
+    override fun userNotificationCenter(
+        center: UNUserNotificationCenter,
+        willPresentNotification: UNNotification,
+        withCompletionHandler: (UNNotificationPresentationOptions) -> Unit
+    ) {
+        withCompletionHandler(
+            UNNotificationPresentationOptionBanner or
+                UNNotificationPresentationOptionList or
+                UNNotificationPresentationOptionSound
+        )
+    }
+}
+
+// 注册通知中心代理，使前台也能展示课前提醒与测试通知
+fun installIosNotificationCenterDelegate() {
+    UNUserNotificationCenter.currentNotificationCenter().delegate = IosForegroundNotificationDelegate
 }
 
 // iOS 本地通知调度与测试器（基于 UNUserNotificationCenter，7 天滑动窗口规避 64 条上限）

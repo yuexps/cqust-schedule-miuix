@@ -9,12 +9,14 @@ plugins {
 }
 
 kotlin {
-    androidLibrary {
+    android {
         namespace = "top.msfxp.schedule.shared"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
         // 开启 Android 资源打包，保证 Compose Multiplatform 资源随 AAR 进入 APK
-        androidResources.enable = true
+        androidResources {
+            enable = true
+        }
     }
 
     listOf(
@@ -29,10 +31,10 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.ui)
-            api(compose.components.resources)
+            implementation(libs.compose.runtime.kmp)
+            implementation(libs.compose.foundation.kmp)
+            implementation(libs.compose.ui.kmp)
+            api(libs.compose.components.resources.kmp)
 
             // Miuix KMP 组件
             implementation(libs.miuix.ui.kmp)
@@ -76,6 +78,11 @@ kotlin {
             implementation(libs.kotlin.test)
         }
     }
+
+    // expect/actual 类/对象为 Beta 特性，显式确认使用以消除编译提示
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
 }
 
 compose.resources {
@@ -86,6 +93,11 @@ compose.resources {
 
 room {
     schemaDirectory("$projectDir/schemas")
+}
+
+// Room 在 KMP androidLibrary 变体下无法自动注入 schema 目录，改由 KSP 直接传递
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {

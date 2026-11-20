@@ -13,6 +13,7 @@ import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.usePinned
+import kotlinx.cinterop.useContents
 import kotlinx.cinterop.value
 import platform.CoreCrypto.CCCrypt
 import platform.CoreCrypto.CCCryptorCreateWithMode
@@ -53,6 +54,22 @@ import platform.CoreFoundation.CFDictionaryCreateMutable
 import platform.CoreFoundation.CFDictionarySetValue
 import platform.CoreFoundation.CFTypeRefVar
 import platform.CoreFoundation.kCFBooleanTrue
+import platform.CoreGraphics.CGPointMake
+import platform.CoreGraphics.CGRectMake
+import platform.CoreGraphics.CGSizeMake
+import platform.UIKit.UIColor
+import platform.UIKit.UIFont
+import platform.UIKit.UILabel
+import platform.UIKit.NSTextAlignmentCenter
+import platform.UIKit.UIApplication
+import platform.UIKit.UIView
+import platform.UIKit.UIWindow
+import platform.UIKit.UIWindowScene
+import platform.darwin.DISPATCH_TIME_NOW
+import platform.darwin.dispatch_after
+import platform.darwin.dispatch_async
+import platform.darwin.dispatch_get_main_queue
+import platform.darwin.dispatch_time
 import platform.posix.memcpy
 import platform.posix.size_tVar
 import kotlin.random.Random
@@ -309,7 +326,7 @@ object IosPlatformExternalHandler : PlatformExternalHandler {
         return openBrowser(scheme)
     }
 
-    override fun showToast(message: String) = Unit
+    override fun showToast(message: String) = showIosToast(message)
 
     override fun getAvailableMapApps(): List<PlatformMapAppItem> {
         val app = platform.UIKit.UIApplication.sharedApplication
@@ -332,6 +349,52 @@ object IosPlatformExternalHandler : PlatformExternalHandler {
             MapAppType.TENCENT -> "qqmap://map/routeplan?type=walk&from=我的位置&to=$encoded&referer=cqust_schedule"
         }
         return openBrowser(urlStr)
+    }
+}
+
+// 定位当前 key window（Toast 浮层挂载目标）
+private fun resolveIosKeyWindow(): UIWindow? {
+    val windows = UIApplication.sharedApplication.connectedScenes
+        .filterIsInstance<UIWindowScene>()
+        .flatMap { scene -> scene.windows.filterIsInstance<UIWindow>() }
+    return windows.firstOrNull { it.keyWindow } ?: windows.firstOrNull()
+}
+
+// 在当前窗口层叠一个淡入淡出的轻量提示条
+@OptIn(ExperimentalForeignApi::class)
+private fun showIosToast(message: String) {
+    if (message.isBlank()) return
+    dispatch_async(dispatch_get_main_queue()) {
+        val window = resolveIosKeyWindow() ?: return@dispatch_async
+        val toast = UILabel().apply {
+            text = message
+            numberOfLines = 0L
+            textAlignment = NSTextAlignmentCenter
+            textColor = UIColor.whiteColor
+            font = UIFont.systemFontOfSize(14.0)
+            backgroundColor = UIColor.blackColor.colorWithAlphaComponent(0.82)
+            alpha = 0.0
+        }
+        toast.layer.cornerRadius = 12.0
+        toast.layer.masksToBounds = true
+
+        val (windowWidth, windowHeight) = window.bounds.useContents { size.width to size.height }
+        val maxContentWidth = windowWidth * 0.78
+        val (contentWidth, contentHeight) = toast
+            .sizeThatFits(CGSizeMake(maxContentWidth, Double.MAX_VALUE))
+            .useContents { width to height }
+        toast.frame = CGRectMake(0.0, 0.0, contentWidth + 32.0, contentHeight + 20.0)
+        toast.center = CGPointMake(windowWidth / 2.0, windowHeight * 0.8)
+        window.addSubview(toast)
+
+        UIView.animateWithDuration(0.2, animations = { toast.alpha = 1.0 })
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1_800_000_000L), dispatch_get_main_queue()) {
+            UIView.animateWithDuration(
+                duration = 0.25,
+                animations = { toast.alpha = 0.0 },
+                completion = { toast.removeFromSuperview() }
+            )
+        }
     }
 }
 

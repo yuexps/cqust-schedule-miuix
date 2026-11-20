@@ -11,7 +11,9 @@ import kotlinx.coroutines.launch
 import top.msfxp.schedule.data.model.*
 import top.msfxp.schedule.data.repository.SettingsRepository
 import top.msfxp.schedule.platform.AndroidPlatformWallpaperStorage
+import top.msfxp.schedule.ui.settings.subscreens.WallpaperCropRegion
 import java.io.File
+import kotlin.math.roundToInt
 
 // 个性化反馈提示枚举
 enum class PersonalizationMessage(val resId: Int) {
@@ -97,9 +99,14 @@ class PersonalizationViewModel(
     }
 
     // 保存裁剪后的壁纸
-    fun applyCroppedWallpaper(croppedBitmap: android.graphics.Bitmap) {
+    fun applyCroppedWallpaper(source: android.graphics.Bitmap, region: WallpaperCropRegion) {
         viewModelScope.launch(Dispatchers.IO) {
-            val bytes = wallpaperStorage.encodeBitmapToJpegBytes(croppedBitmap)
+            val cropped = cropBitmap(source, region)
+            if (cropped == null) {
+                _message.value = PersonalizationMessage.WallpaperSetFail
+                return@launch
+            }
+            val bytes = wallpaperStorage.encodeBitmapToJpegBytes(cropped)
             val success = settingsRepository.saveWallpaperBytes(bytes)
             croppingBitmap.value = null
             if (success) {
@@ -110,6 +117,16 @@ class PersonalizationViewModel(
             }
         }
     }
+
+    // 按归一化区域裁切位图
+    private fun cropBitmap(source: android.graphics.Bitmap, region: WallpaperCropRegion): android.graphics.Bitmap? =
+        runCatching {
+            val x = (region.left * source.width).roundToInt().coerceIn(0, source.width - 1)
+            val y = (region.top * source.height).roundToInt().coerceIn(0, source.height - 1)
+            val w = (region.width * source.width).roundToInt().coerceIn(1, source.width - x)
+            val h = (region.height * source.height).roundToInt().coerceIn(1, source.height - y)
+            android.graphics.Bitmap.createBitmap(source, x, y, w, h)
+        }.getOrNull()
 
     // 取消裁剪
     fun cancelCropping() {

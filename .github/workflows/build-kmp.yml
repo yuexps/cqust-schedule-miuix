@@ -57,19 +57,19 @@ jobs:
               --ks-key-alias "$KEY_ALIAS" \
               --ks-pass pass:"$KEYSTORE_PASSWORD" \
               --key-pass pass:"$KEY_PASSWORD" \
-              --out "$APK_DIR/cqust-schedule-android-arm64-release.apk" \
+              --out "$APK_DIR/cqust-schedule-android-arm64.apk" \
               "$SRC_APK"
             rm -f release.jks
-            echo "FINAL_APK_PATH=$APK_DIR/cqust-schedule-android-arm64-release.apk" >> $GITHUB_ENV
+            echo "FINAL_APK_PATH=$APK_DIR/cqust-schedule-android-arm64.apk" >> $GITHUB_ENV
           else
-            cp "$SRC_APK" "$APK_DIR/cqust-schedule-android-arm64-release-unsigned.apk"
-            echo "FINAL_APK_PATH=$APK_DIR/cqust-schedule-android-arm64-release-unsigned.apk" >> $GITHUB_ENV
+            cp "$SRC_APK" "$APK_DIR/cqust-schedule-android-arm64-unsigned.apk"
+            echo "FINAL_APK_PATH=$APK_DIR/cqust-schedule-android-arm64-unsigned.apk" >> $GITHUB_ENV
           fi
 
       - name: Upload Android Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: cqust-schedule-android-arm64-release-apk
+          name: cqust-schedule-android-arm64
           path: ${{ env.FINAL_APK_PATH }}
 
   build-ios:
@@ -136,10 +136,36 @@ jobs:
           mkdir -p build_ipa/Payload
           cp -R "$APP_PATH" build_ipa/Payload/
           cd build_ipa
-          zip -qry ../cqust-schedule-ios-arm64-release-unsigned.ipa Payload
+          zip -qry ../cqust-schedule-ios-arm64-unsigned.ipa Payload
+
+      - name: Verify & Package dSYM (用于符号化 .ips 崩溃日志)
+        run: |
+          APP_DSYM=$(find iosApp/build/Build/Products/Release-iphoneos -maxdepth 2 -name "*.app.dSYM" -type d | head -n 1)
+          if [ -z "$APP_DSYM" ]; then
+            echo "Error: 缺少 app dSYM，.ips 崩溃日志无法符号化（检查 DEBUG_INFORMATION_FORMAT）"
+            find iosApp/build/Build/Products/Release-iphoneos -maxdepth 3 -name "*.dSYM"
+            exit 1
+          fi
+          mkdir -p build_dsym
+          cp -R "$APP_DSYM" build_dsym/
+          # 动态 framework 带独立 dSYM；静态 framework 的符号已并入 app dSYM
+          FW_DSYM=$(find shared/build -name "ComposeApp.framework.dSYM" -type d 2>/dev/null | head -n 1)
+          if [ -n "$FW_DSYM" ]; then
+            cp -R "$FW_DSYM" build_dsym/
+          else
+            echo "::warning::未找到 ComposeApp.framework.dSYM（静态 framework 符号通常已并入 app dSYM）"
+          fi
+          echo "== dSYM UUID（需与 .ips 的 binaryImages.uuid 对齐）=="
+          find build_dsym -maxdepth 1 -name "*.dSYM" -type d -exec dwarfdump --uuid {} \;
 
       - name: Upload iOS Release IPA
         uses: actions/upload-artifact@v4
         with:
-          name: cqust-schedule-ios-arm64-release-ipa
-          path: cqust-schedule-ios-arm64-release-unsigned.ipa
+          name: cqust-schedule-ios-arm64
+          path: cqust-schedule-ios-arm64-unsigned.ipa
+
+      - name: Upload iOS Release dSYM
+        uses: actions/upload-artifact@v4
+        with:
+          name: cqust-schedule-ios-dsym
+          path: build_dsym/
