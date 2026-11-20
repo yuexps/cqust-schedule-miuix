@@ -1,0 +1,133 @@
+name: Build KMP Release (Android APK & iOS IPA)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_ios:
+        description: '构建 iOS IPA (arm64)'
+        type: boolean
+        default: true
+      build_android:
+        description: '构建 Android APK (arm64-v8a)'
+        type: boolean
+        default: false
+
+jobs:
+  build-android:
+    name: Build Android Release APK (arm64-v8a)
+    if: ${{ inputs.build_android }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Run Unit Tests & Build Release APK (R8)
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :app:testDebugUnitTest :app:assembleRelease --no-daemon --stacktrace
+
+      - name: Sign Release APK (If Secrets Configured)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEY }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          APK_DIR="app/build/outputs/apk/release"
+          SRC_APK=$(find "$APK_DIR" -maxdepth 1 -name "*.apk" | head -n 1)
+          if [ -z "$SRC_APK" ]; then
+            echo "Error: Release APK not found in $APK_DIR"
+            exit 1
+          fi
+
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEY_ALIAS" ]; then
+            APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+            echo "$KEYSTORE_BASE64" | base64 -d > release.jks
+            "$APKSIGNER" sign \
+              --ks release.jks \
+              --ks-key-alias "$KEY_ALIAS" \
+              --ks-pass pass:"$KEYSTORE_PASSWORD" \
+              --key-pass pass:"$KEY_PASSWORD" \
+              --out "$APK_DIR/cqust-schedule-android-arm64-release.apk" \
+              "$SRC_APK"
+            rm -f release.jks
+            echo "FINAL_APK_PATH=$APK_DIR/cqust-schedule-android-arm64-release.apk" >> $GITHUB_ENV
+          else
+            cp "$SRC_APK" "$APK_DIR/cqust-schedule-android-arm64-release-unsigned.apk"
+            echo "FINAL_APK_PATH=$APK_DIR/cqust-schedule-android-arm64-release-unsigned.apk" >> $GITHUB_ENV
+          fi
+
+      - name: Upload Android Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cqust-schedule-android-arm64-release-apk
+          path: ${{ env.FINAL_APK_PATH }}
+
+  build-ios:
+    name: Build iOS Release IPA (arm64)
+    if: ${{ inputs.build_ios }}
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Generate Xcode Project & Build Release iOS App
+        run: |
+          chmod +x ./gradlew
+          if ! command -v xcodegen &> /dev/null; then
+            brew install xcodegen
+          fi
+          cd iosApp
+          xcodegen generate
+          xcodebuild \
+            -project iosApp.xcodeproj \
+            -scheme iosApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -arch arm64 \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Verify Compose Resources & Package Release IPA
+        run: |
+          APP_PATH=$(find iosApp/build/Build/Products/Release-iphoneos -name "CqustSchedule.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: CqustSchedule.app not found"
+            exit 1
+          fi
+          if [ ! -d "$APP_PATH/compose-resources" ]; then
+            echo "Error: compose-resources missing in $APP_PATH (will crash on launch)"
+            ls -la "$APP_PATH"
+            exit 1
+          fi
+          mkdir -p build_ipa/Payload
+          cp -R "$APP_PATH" build_ipa/Payload/
+          cd build_ipa
+          zip -qry ../cqust-schedule-ios-arm64-release-unsigned.ipa Payload
+
+      - name: Upload iOS Release IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: cqust-schedule-ios-arm64-release-ipa
+          path: cqust-schedule-ios-arm64-release-unsigned.ipa

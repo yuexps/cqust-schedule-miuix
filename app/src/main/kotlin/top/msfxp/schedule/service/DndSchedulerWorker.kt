@@ -27,10 +27,12 @@ import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import top.msfxp.schedule.domain.EffectiveScheduleResolver
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.ZoneId
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
+import top.msfxp.schedule.util.atTimeEpochMillis
+import top.msfxp.schedule.util.isoDayOfWeekNumber
+import top.msfxp.schedule.util.plusDays
+import top.msfxp.schedule.util.todayLocalDate
 import java.util.concurrent.TimeUnit
 
 // 定时注册每日课前提醒与上课免打扰闹钟
@@ -107,8 +109,8 @@ class DndSchedulerWorker(
                 exams = examRepository.getExamsOnce(tableId, currentSemester.id)
             )
 
-            val today = LocalDate.now()
-            for (targetDate in (0L..6L).map { today.plusDays(it) }) {
+            val today = todayLocalDate()
+            for (targetDate in (0..6).map { today.plusDays(it) }) {
                 syncAlarmsForDate(targetDate, scheduleContext, alarmManager)
                 syncExamReminders(targetDate, scheduleContext, alarmManager)
             }
@@ -131,7 +133,7 @@ class DndSchedulerWorker(
             return
         }
 
-        val dayOfWeek = targetDate.dayOfWeek.value
+        val dayOfWeek = targetDate.isoDayOfWeekNumber
         val dayEvents = EffectiveScheduleResolver.resolveDayEvents(
             allEvents = scheduleContext.allEvents,
             adjustments = scheduleContext.adjustments,
@@ -186,9 +188,8 @@ class DndSchedulerWorker(
         val exams = scheduleContext.exams.filter { it.isScheduled && it.examDate == dateStr }
         exams.take(MAX_EXAM_PER_DAY).forEachIndexed { index, exam ->
             val startTime = parseExamTime(exam.startTime) ?: return@forEachIndexed
-            val triggerMillis = LocalDateTime.of(targetDate, startTime)
-                .minusMinutes(scheduleContext.settings.remindBeforeMinutes.toLong())
-                .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val triggerMillis = targetDate.atTimeEpochMillis(startTime) -
+                scheduleContext.settings.remindBeforeMinutes * 60_000L
             if (triggerMillis <= System.currentTimeMillis()) return@forEachIndexed
 
             val reqCode = buildRequestCode("EXAM_REMIND", targetDate, index)
@@ -225,10 +226,8 @@ class DndSchedulerWorker(
         alarmManager: AlarmManager
     ) {
         val slot = findSectionTimeSlot(event.startSection)
-        val startTime = parseSlotTime(slot?.startTime, LocalTime.of(8, 30))
-        val triggerMillis = LocalDateTime.of(targetDate, startTime)
-            .minusMinutes(remindMinutes.toLong())
-            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val startTime = parseSlotTime(slot?.startTime, LocalTime(8, 30))
+        val triggerMillis = targetDate.atTimeEpochMillis(startTime) - remindMinutes * 60_000L
 
         if (triggerMillis <= System.currentTimeMillis()) return
 
@@ -252,9 +251,8 @@ class DndSchedulerWorker(
         alarmManager: AlarmManager
     ) {
         val slot = findSectionTimeSlot(startSection)
-        val startTime = parseSlotTime(slot?.startTime, LocalTime.of(8, 30))
-        val triggerMillis = LocalDateTime.of(targetDate, startTime)
-            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val startTime = parseSlotTime(slot?.startTime, LocalTime(8, 30))
+        val triggerMillis = targetDate.atTimeEpochMillis(startTime)
 
         if (triggerMillis <= System.currentTimeMillis()) return
 
@@ -274,9 +272,8 @@ class DndSchedulerWorker(
         alarmManager: AlarmManager
     ) {
         val slot = findSectionTimeSlot(endSection)
-        val endTime = parseSlotTime(slot?.endTime, LocalTime.of(9, 15))
-        val triggerMillis = LocalDateTime.of(targetDate, endTime)
-            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val endTime = parseSlotTime(slot?.endTime, LocalTime(9, 15))
+        val triggerMillis = targetDate.atTimeEpochMillis(endTime)
 
         if (triggerMillis <= System.currentTimeMillis()) return
 

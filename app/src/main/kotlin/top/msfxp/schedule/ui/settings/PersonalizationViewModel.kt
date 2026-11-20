@@ -1,16 +1,16 @@
 package top.msfxp.schedule.ui.settings
 
-import android.app.Application
 import android.net.Uri
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import top.msfxp.schedule.data.model.*
 import top.msfxp.schedule.data.repository.SettingsRepository
+import top.msfxp.schedule.platform.AndroidPlatformWallpaperStorage
 import java.io.File
 
 // 个性化反馈提示枚举
@@ -33,9 +33,9 @@ data class PersonalizationUiState(
 
 // 个性化业务视图模型
 class PersonalizationViewModel(
-    application: Application,
-    private val settingsRepository: SettingsRepository
-) : AndroidViewModel(application) {
+    private val settingsRepository: SettingsRepository,
+    private val wallpaperStorage: AndroidPlatformWallpaperStorage
+) : ViewModel() {
 
     private val _message = MutableStateFlow<PersonalizationMessage?>(null)
     private val _wallpaperTimestamp = MutableStateFlow(System.currentTimeMillis())
@@ -48,7 +48,7 @@ class PersonalizationViewModel(
         _message,
         _wallpaperTimestamp
     ) { settings, msg, timestamp ->
-        val wallpaperFile = settingsRepository.getWallpaperFile()
+        val wallpaperFile = wallpaperStorage.getWallpaperFile()
         val fileExists = settings.hasCustomWallpaper && wallpaperFile.exists()
         val parsedColors = parseCoursePaletteJson(settings.customCourseColorsJson)
 
@@ -66,7 +66,7 @@ class PersonalizationViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = run {
             val initialSettings = settingsRepository.currentSettings
-            val wallpaperFile = settingsRepository.getWallpaperFile()
+            val wallpaperFile = wallpaperStorage.getWallpaperFile()
             val fileExists = initialSettings.hasCustomWallpaper && wallpaperFile.exists()
             PersonalizationUiState(
                 hasCustomWallpaper = fileExists,
@@ -86,7 +86,7 @@ class PersonalizationViewModel(
     fun prepareCropping(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             isDecodingCropImage.value = true
-            val bitmap = settingsRepository.decodeBitmapForCropping(uri)
+            val bitmap = wallpaperStorage.decodeBitmapForCropping(uri)
             isDecodingCropImage.value = false
             if (bitmap != null) {
                 croppingBitmap.value = bitmap
@@ -99,7 +99,8 @@ class PersonalizationViewModel(
     // 保存裁剪后的壁纸
     fun applyCroppedWallpaper(croppedBitmap: android.graphics.Bitmap) {
         viewModelScope.launch(Dispatchers.IO) {
-            val success = settingsRepository.saveCroppedWallpaper(croppedBitmap)
+            val bytes = wallpaperStorage.encodeBitmapToJpegBytes(croppedBitmap)
+            val success = settingsRepository.saveWallpaperBytes(bytes)
             croppingBitmap.value = null
             if (success) {
                 _wallpaperTimestamp.value = System.currentTimeMillis()
@@ -118,7 +119,8 @@ class PersonalizationViewModel(
     // 设置课表壁纸 (保留直接设置兜底)
     fun setWallpaper(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
-            val success = settingsRepository.saveWallpaperFromUri(uri)
+            val bytes = wallpaperStorage.decodeUriToJpegBytes(uri)
+            val success = bytes != null && settingsRepository.saveWallpaperBytes(bytes)
             if (success) {
                 _wallpaperTimestamp.value = System.currentTimeMillis()
                 _message.value = PersonalizationMessage.WallpaperSetSuccess

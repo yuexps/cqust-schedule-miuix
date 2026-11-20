@@ -28,8 +28,11 @@ import top.msfxp.schedule.data.model.resolveExamColorIndex
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
-import java.time.LocalDate
-import java.time.LocalTime
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
+import top.msfxp.schedule.util.isoDayOfWeekNumber
+import top.msfxp.schedule.util.nowLocalTime
+import top.msfxp.schedule.util.todayLocalDate
 
 // 微件日程条目
 data class WidgetAgendaItem(
@@ -58,12 +61,12 @@ suspend fun updateAllAppWidgets(context: Context) = withContext(Dispatchers.IO) 
         val totalWeeks = currentSemester?.totalWeeks ?: 20
         val startDate = currentSemester.effectiveStartDate
 
-        val today = LocalDate.now()
+        val today = todayLocalDate()
         val currentWeek = SemesterDateHelper.calculateRawWeekNumber(startDate, today, totalWeeks)
         val isVacation = currentWeek == null
         val tableId = scheduleRepo.getOrCreateDefaultTableId()
 
-        val todayCourses = if (currentWeek == null) emptyList() else scheduleRepo.getTodayCourses(tableId, currentSemester?.id.orEmpty(), today.dayOfWeek.value, currentWeek)
+        val todayCourses = if (currentWeek == null) emptyList() else scheduleRepo.getTodayCourses(tableId, currentSemester?.id.orEmpty(), today.isoDayOfWeekNumber, currentWeek)
         val todayExams = if (isVacation) emptyList() else runCatching {
             WidgetDependencyContainer.examRepository
                 .getExamsOnce(tableId, currentSemester?.id.orEmpty())
@@ -105,8 +108,8 @@ fun renderScheduleWidget(
 
     // 顶部状态栏渲染
     views.setTextViewText(R.id.tv_school_label, context.getString(R.string.widget_brand_name))
-    views.setTextViewText(R.id.tv_date_month_day, context.getString(R.string.widget_date_format, today.monthValue, today.dayOfMonth))
-    views.setTextViewText(R.id.tv_date_weekday, getDayOfWeekString(context, today.dayOfWeek.value))
+    views.setTextViewText(R.id.tv_date_month_day, context.getString(R.string.widget_date_format, today.monthNumber, today.dayOfMonth))
+    views.setTextViewText(R.id.tv_date_weekday, getDayOfWeekString(context, today.isoDayOfWeekNumber))
 
     // 筛选未上完的日程条目
     val activeItems = agendaItems.filter { !it.isFinished }
@@ -156,7 +159,7 @@ private fun buildAgendaItems(
     palette: List<CourseColor>,
     courseColorIndexMap: Map<String, Int>
 ): List<WidgetAgendaItem> {
-    val now = LocalTime.now()
+    val now = nowLocalTime()
     val courseItems = todayCourses.map { item ->
         WidgetAgendaItem(
             title = item.event.courseName,

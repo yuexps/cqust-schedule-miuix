@@ -182,7 +182,7 @@ fun ClassAutomationScreen(
                                         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.automation_test_dnd_permission_toast)) }
                                         PermissionHelper.openDndSettings(context)
                                     } else {
-                                        viewModel.testToggleModeImmediately(context)
+                                        viewModel.testToggleModeImmediately()
                                         scope.launch {
                                             snackbarHostState.showSnackbar(context.getString(R.string.automation_test_immediate_toast))
                                         }
@@ -201,7 +201,7 @@ fun ClassAutomationScreen(
                                         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.automation_test_alarm_permission_toast)) }
                                         PermissionHelper.openExactAlarmSettings(context)
                                     } else {
-                                        viewModel.scheduleDelayed30sDndTest(context)
+                                        viewModel.scheduleDelayed30sDndTest()
                                         scope.launch {
                                             snackbarHostState.showSnackbar(context.getString(R.string.automation_test_delayed_scheduled_toast))
                                         }

@@ -18,9 +18,9 @@ import top.msfxp.schedule.data.model.findSectionTimeSlot
 import top.msfxp.schedule.data.repository.ExamRepository
 import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
-import java.time.LocalDateTime
-import java.time.LocalTime
-import java.time.ZoneId
+import kotlinx.datetime.LocalTime
+import top.msfxp.schedule.util.atTimeEpochMillis
+import top.msfxp.schedule.util.plusDays
 import java.util.TimeZone
 
 // 系统日历同步助手
@@ -29,7 +29,7 @@ class CalendarSyncHelper(
     private val settingsRepository: SettingsRepository,
     private val scheduleRepository: ScheduleRepository,
     private val examRepository: ExamRepository
-) {
+) : top.msfxp.schedule.platform.PlatformCalendarSync {
     companion object {
         private const val LEGACY_CALENDAR_ACCOUNT_NAME = "cqust_schedule_account"
         private const val CALENDAR_ACCOUNT_TYPE = CalendarContract.ACCOUNT_TYPE_LOCAL
@@ -53,7 +53,7 @@ class CalendarSyncHelper(
     }
 
     // 将当前课表增量同步至系统日历
-    suspend fun syncCurrentScheduleToCalendar(): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun syncCurrentScheduleToCalendar(): Boolean = withContext(Dispatchers.IO) {
         if (!hasCalendarPermission()) return@withContext false
 
         syncMutex.withLock {
@@ -70,7 +70,6 @@ class CalendarSyncHelper(
                 if (calendarId == -1L) return@withLock false
 
                 val adjustments = scheduleRepository.getAdjustmentsOnce(tableId, semesterId = currentSemester.id)
-                val zoneId = ZoneId.systemDefault()
                 val calendarRemindMinutes = settings.calendarRemindBeforeMinutes
                 val desiredList = mutableListOf<DesiredCalendarEvent>()
                 val usedKeys = mutableSetOf<String>()
@@ -92,17 +91,14 @@ class CalendarSyncHelper(
                         val startTime = startSlot?.startTime ?: "08:30"
                         val endTime = endSlot?.endTime ?: "09:15"
 
-                        val parsedStartTime = try { LocalTime.parse(startTime) } catch (_: Exception) { LocalTime.of(8, 30) }
-                        val parsedEndTime = try { LocalTime.parse(endTime) } catch (_: Exception) { LocalTime.of(9, 15) }
+                        val parsedStartTime = try { LocalTime.parse(startTime) } catch (_: Exception) { LocalTime(8, 30) }
+                        val parsedEndTime = try { LocalTime.parse(endTime) } catch (_: Exception) { LocalTime(9, 15) }
 
-                        val daysOffset = (w - 1) * 7L + (ev.day - 1)
+                        val daysOffset = (w - 1) * 7 + (ev.day - 1)
                         val eventDate = semesterStartDate.plusDays(daysOffset)
 
-                        val startDateTime = LocalDateTime.of(eventDate, parsedStartTime)
-                        val endDateTime = LocalDateTime.of(eventDate, parsedEndTime)
-
-                        val startMillis = startDateTime.atZone(zoneId).toInstant().toEpochMilli()
-                        val endMillis = endDateTime.atZone(zoneId).toInstant().toEpochMilli()
+                        val startMillis = eventDate.atTimeEpochMillis(parsedStartTime)
+                        val endMillis = eventDate.atTimeEpochMillis(parsedEndTime)
 
                         val descParts = mutableListOf<String>()
                         if (ev.isAdjusted) descParts.add(context.getString(R.string.calendar_event_desc_adjusted))
@@ -168,7 +164,6 @@ class CalendarSyncHelper(
         val date = exam.examDateValue ?: return null
         val start = exam.startTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: return null
         val end = exam.endTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: return null
-        val zoneId = ZoneId.systemDefault()
         val location = exam.seatNo?.takeIf { it.isNotBlank() }?.let { seat ->
             context.getString(R.string.calendar_exam_location_format, exam.displayPosition, seat)
         } ?: exam.displayPosition
@@ -185,8 +180,8 @@ class CalendarSyncHelper(
             title = context.getString(R.string.calendar_exam_title_format, exam.courseName),
             location = location,
             description = description,
-            startMillis = LocalDateTime.of(date, start).atZone(zoneId).toInstant().toEpochMilli(),
-            endMillis = LocalDateTime.of(date, end).atZone(zoneId).toInstant().toEpochMilli(),
+            startMillis = date.atTimeEpochMillis(start),
+            endMillis = date.atTimeEpochMillis(end),
             remindMinutes = remindMinutes
         )
     }
@@ -515,7 +510,7 @@ class CalendarSyncHelper(
     }
 
     // 从系统日历中删除专属日历账户及所有关联日程
-    suspend fun deleteScheduleCalendar(): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun deleteScheduleCalendar(): Boolean = withContext(Dispatchers.IO) {
         if (!hasCalendarPermission()) return@withContext false
 
         syncMutex.withLock {

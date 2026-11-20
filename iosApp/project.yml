@@ -1,0 +1,49 @@
+name: iosApp
+options:
+  bundleIdPrefix: top.msfxp.schedule
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  iosApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: iosApp
+    info:
+      path: iosApp/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: top.msfxp.schedule.ios
+        PRODUCT_NAME: CqustSchedule
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MARKETING_VERSION: 1.1.4
+        CURRENT_PROJECT_VERSION: 14
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -framework
+          - ComposeApp
+          - -lsqlite3
+        FRAMEWORK_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        ENABLE_CODE_COVERAGE: "NO"
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -Osize
+          DEAD_CODE_STRIPPING: "YES"
+          DEPLOYMENT_POSTPROCESSING: "YES"
+          STRIP_INSTALLED_PRODUCT: "YES"
+          COPY_PHASE_STRIP: "YES"
+          STRIP_STYLE: all
+          DEBUG_INFORMATION_FORMAT: dwarf
+    preBuildScripts:
+      - name: Compile Kotlin Multiplatform Framework
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$ENABLE_PREVIEWS" = "YES" ] || [ "$SKIP_KMP_PREBUILD" = "YES" ]; then
+            exit 0
+          fi
+          cd "$SRCROOT/.."
+          ./gradlew :shared:embedAndSignAppleFrameworkForXcode --no-daemon -Dorg.gradle.jvmargs="-Xmx6144M -Dfile.encoding=UTF-8"

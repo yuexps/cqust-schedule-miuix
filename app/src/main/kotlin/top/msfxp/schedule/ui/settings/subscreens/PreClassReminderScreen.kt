@@ -189,7 +189,7 @@ fun PreClassReminderScreen(
                                             PermissionHelper.openNotificationSettings(context)
                                         }
                                     } else {
-                                        viewModel.sendTestNotification(context)
+                                        viewModel.sendTestNotification()
                                         scope.launch {
                                             snackbarHostState.showSnackbar(context.getString(R.string.reminder_test_sent_toast))
                                         }
@@ -211,7 +211,7 @@ fun PreClassReminderScreen(
                                         scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.reminder_test_alarm_permission_toast)) }
                                         PermissionHelper.openExactAlarmSettings(context)
                                     } else {
-                                        viewModel.scheduleDelayed30sTestNotification(context)
+                                        viewModel.scheduleDelayed30sTestNotification()
                                         scope.launch {
                                             snackbarHostState.showSnackbar(context.getString(R.string.reminder_test_delayed_scheduled_toast))
                                         }

@@ -87,11 +87,9 @@ kotlin {
     jvmToolchain(21)
 }
 
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
-}
-
 dependencies {
+    implementation(project(":shared"))
+
     // AndroidX 基础
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -113,10 +111,9 @@ dependencies {
     implementation(libs.miuix.icons)
     implementation(libs.miuix.nav)
 
-    // Room 数据库
+    // Room 数据库（KSP 代码生成位于 :shared）
     implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
+    implementation(libs.androidx.sqlite.bundled)
 
     // DataStore & WorkManager
     implementation(libs.androidx.datastore.preferences)
@@ -129,6 +126,7 @@ dependencies {
     // 序列化与工具
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.datetime)
 
     // Koin 依赖注入
     implementation(libs.koin.android)

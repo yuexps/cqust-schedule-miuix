@@ -24,8 +24,9 @@ import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import top.msfxp.schedule.domain.EffectiveScheduleResolver
 import top.msfxp.schedule.widget.updateAllAppWidgets
-import java.time.LocalDate
-import java.time.format.DateTimeParseException
+import top.msfxp.schedule.util.isoDayOfWeekNumber
+import top.msfxp.schedule.util.parseLocalDateOrNull
+import top.msfxp.schedule.util.todayLocalDate
 
 // 课程闹钟与免打扰/静音广播接收器
 class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
@@ -244,11 +245,7 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
     // 校验指定日期的节次当前是否仍有有效课程开始
     private suspend fun hasActiveCourseAtSlot(dateStr: String?, section: Int): Boolean {
         if (section == 0) return true
-        val date = try {
-            if (dateStr.isNullOrBlank()) LocalDate.now() else LocalDate.parse(dateStr)
-        } catch (_: DateTimeParseException) {
-            LocalDate.now()
-        }
+        val date = parseLocalDateOrNull(dateStr) ?: todayLocalDate()
 
         val semester = scheduleRepository.getCurrentSemesterOnce() ?: return false
         val weekNumber = SemesterDateHelper.calculateRawWeekNumber(semester.effectiveStartDate, date, semester.totalWeeks)
@@ -261,7 +258,7 @@ class CourseAlarmReceiver : BroadcastReceiver(), KoinComponent {
             allEvents = allEvents,
             adjustments = adjustments,
             weekNumber = weekNumber,
-            dayOfWeek = date.dayOfWeek.value
+            dayOfWeek = date.isoDayOfWeekNumber
         )
         return dayEvents.any { it.startSection == section }
     }

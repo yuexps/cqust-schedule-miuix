@@ -22,4 +22,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "cqust-schedule-miuix"
+include(":shared")
 include(":app")
