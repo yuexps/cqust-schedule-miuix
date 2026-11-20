@@ -95,9 +95,14 @@ room {
     schemaDirectory("$projectDir/schemas")
 }
 
-// Room 在 KMP androidLibrary 变体下无法自动注入 schema 目录，改由 KSP 直接传递
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
+// Room 插件不覆盖 KMP androidLibrary 变体的 KSP 任务，Android 侧单独启用 schema 导出
+tasks.withType<com.google.devtools.ksp.gradle.KspAATask>().configureEach {
+    if (name.startsWith("kspAndroid")) {
+        val schemaDir = layout.projectDirectory.dir("schemas").asFile.absolutePath
+        commandLineArgumentProviders.add(
+            org.gradle.process.CommandLineArgumentProvider { listOf("room.schemaLocation=$schemaDir") }
+        )
+    }
 }
 
 dependencies {
