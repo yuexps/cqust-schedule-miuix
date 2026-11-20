@@ -168,8 +168,8 @@ object IosPlatformReleaseInstaller : PlatformReleaseInstaller {
     }
 }
 
-// 前台通知展示代理：App 在前台时仍弹出横幅与声音（系统弱引用代理，故由单例持有）
-private object IosForegroundNotificationDelegate : NSObject(), UNUserNotificationCenterDelegateProtocol {
+// 前台通知展示代理：App 在前台时仍弹出横幅与声音
+private class IosForegroundNotificationDelegate : NSObject(), UNUserNotificationCenterDelegateProtocol {
     override fun userNotificationCenter(
         center: UNUserNotificationCenter,
         willPresentNotification: UNNotification,
@@ -183,9 +183,14 @@ private object IosForegroundNotificationDelegate : NSObject(), UNUserNotificatio
     }
 }
 
+// 系统以弱引用保存代理，需自身持有；实例在函数内创建，避免触发全局初始化器的 ObjC 分配问题
+private var iosNotificationCenterDelegate: IosForegroundNotificationDelegate? = null
+
 // 注册通知中心代理，使前台也能展示课前提醒与测试通知
 fun installIosNotificationCenterDelegate() {
-    UNUserNotificationCenter.currentNotificationCenter().delegate = IosForegroundNotificationDelegate
+    val delegate = iosNotificationCenterDelegate
+        ?: IosForegroundNotificationDelegate().also { iosNotificationCenterDelegate = it }
+    UNUserNotificationCenter.currentNotificationCenter().delegate = delegate
 }
 
 // iOS 本地通知调度与测试器（基于 UNUserNotificationCenter，7 天滑动窗口规避 64 条上限）
