@@ -40,6 +40,7 @@ import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.number
 import top.msfxp.schedule.util.plusWeeks
 import top.msfxp.schedule.util.previousOrSameMonday
 import top.msfxp.schedule.util.todayLocalDate
@@ -158,8 +159,8 @@ fun WeeklyScheduleScreen(
                         text = stringResource(
                             Res.string.schedule_header_date_format,
                             today.year,
-                            today.monthNumber,
-                            today.dayOfMonth
+                            today.month.number,
+                            today.day
                         ),
                         style = MiuixTheme.textStyles.title2.copy(
                             fontWeight = FontWeight.Bold,

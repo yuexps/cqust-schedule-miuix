@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import kotlinx.datetime.number
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,7 +43,7 @@ fun ExamDetailPage(
     val dayStr = exam.resolvedWeekday?.let { dayNames.getOrNull(it - 1) }
         ?: stringResource(Res.string.course_sheet_not_assigned)
     val dateStr = exam.examDateValue
-        ?.let { stringResource(Res.string.exam_date_format, it.monthNumber, it.dayOfMonth) }
+        ?.let { stringResource(Res.string.exam_date_format, it.month.number, it.day) }
         .orEmpty()
     val timeRangeStr = listOfNotNull(exam.startTime, exam.endTime).joinToString("-")
 

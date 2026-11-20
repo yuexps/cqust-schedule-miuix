@@ -9,6 +9,7 @@ import kotlinx.datetime.atTime
 import kotlinx.datetime.daysUntil
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
+import kotlinx.datetime.number
 import kotlinx.datetime.plus
 import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
@@ -63,15 +64,15 @@ fun LocalDate.daysBetween(other: LocalDate): Int = this.daysUntil(other)
 
 // 格式化为 yyyy-MM-dd
 fun LocalDate.formatYmd(): String {
-    val m = monthNumber.toString().padStart(2, '0')
-    val d = dayOfMonth.toString().padStart(2, '0')
+    val m = month.number.toString().padStart(2, '0')
+    val d = day.toString().padStart(2, '0')
     return "$year-$m-$d"
 }
 
 // 格式化为 yyyy/MM/dd
 fun LocalDate.formatSlashYmd(): String {
-    val m = monthNumber.toString().padStart(2, '0')
-    val d = dayOfMonth.toString().padStart(2, '0')
+    val m = month.number.toString().padStart(2, '0')
+    val d = day.toString().padStart(2, '0')
     return "$year/$m/$d"
 }
 

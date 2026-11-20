@@ -30,6 +30,7 @@ import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.number
 import top.msfxp.schedule.util.isoDayOfWeekNumber
 import top.msfxp.schedule.util.nowLocalTime
 import top.msfxp.schedule.util.todayLocalDate
@@ -108,7 +109,7 @@ fun renderScheduleWidget(
 
     // 顶部状态栏渲染
     views.setTextViewText(R.id.tv_school_label, context.getString(R.string.widget_brand_name))
-    views.setTextViewText(R.id.tv_date_month_day, context.getString(R.string.widget_date_format, today.monthNumber, today.dayOfMonth))
+    views.setTextViewText(R.id.tv_date_month_day, context.getString(R.string.widget_date_format, today.month.number, today.day))
     views.setTextViewText(R.id.tv_date_weekday, getDayOfWeekString(context, today.isoDayOfWeekNumber))
 
     // 筛选未上完的日程条目

@@ -29,6 +29,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.number
 import top.msfxp.schedule.util.isoDayOfWeekNumber
 
 // 课程总览界面
@@ -663,7 +664,7 @@ private fun UnmatchedExamCard(
 private fun formatExamDate(examDate: String?): String {
     val date = examDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
         ?: return stringResource(Res.string.course_pending_location)
-    return stringResource(Res.string.exam_date_format, date.monthNumber, date.dayOfMonth)
+    return stringResource(Res.string.exam_date_format, date.month.number, date.day)
 }
 
 // 解析考试星期文案

@@ -8,6 +8,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.Relation
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.number
 import kotlinx.serialization.Serializable
 import top.msfxp.schedule.util.CourseLocationFormatter
 import top.msfxp.schedule.util.currentEpochMillis
@@ -674,7 +675,7 @@ object SemesterDateHelper {
             }
             else -> {
                 val year = fallbackDate.year
-                val month = fallbackDate.monthNumber
+                val month = fallbackDate.month.number
                 if (month in 2..7) {
                     LocalDate(year, 2, 22)
                 } else {

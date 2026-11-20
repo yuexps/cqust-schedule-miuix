@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.number
 import okio.Path.Companion.toPath
 import org.jetbrains.skia.Image
 import org.koin.dsl.module
@@ -248,8 +249,8 @@ class IosNotificationScheduler(
 
                 val comps = NSDateComponents().apply {
                     year = targetDate.year.toLong()
-                    month = targetDate.monthNumber.toLong()
-                    day = targetDate.dayOfMonth.toLong()
+                    month = targetDate.month.number.toLong()
+                    day = targetDate.day.toLong()
                     hour = (triggerTotalMinutes / 60).toLong()
                     minute = (triggerTotalMinutes % 60).toLong()
                     second = 0
@@ -287,8 +288,8 @@ class IosNotificationScheduler(
 
                 val comps = NSDateComponents().apply {
                     year = targetDate.year.toLong()
-                    month = targetDate.monthNumber.toLong()
-                    day = targetDate.dayOfMonth.toLong()
+                    month = targetDate.month.number.toLong()
+                    day = targetDate.day.toLong()
                     hour = (triggerTotalMinutes / 60).toLong()
                     minute = (triggerTotalMinutes % 60).toLong()
                     second = 0

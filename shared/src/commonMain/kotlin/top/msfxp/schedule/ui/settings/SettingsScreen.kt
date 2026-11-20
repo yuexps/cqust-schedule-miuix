@@ -34,6 +34,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.number
 import top.msfxp.schedule.util.daysInMonth
 import top.msfxp.schedule.util.formatYmd
 import top.msfxp.schedule.util.previousOrSameMonday
@@ -639,8 +640,8 @@ private fun StartDatePickerDialog(
     onDismiss: () -> Unit
 ) {
     var selectedYear by remember(initialDate) { mutableIntStateOf(initialDate.year) }
-    var selectedMonth by remember(initialDate) { mutableIntStateOf(initialDate.monthNumber) }
-    var selectedDay by remember(initialDate) { mutableIntStateOf(initialDate.dayOfMonth) }
+    var selectedMonth by remember(initialDate) { mutableIntStateOf(initialDate.month.number) }
+    var selectedDay by remember(initialDate) { mutableIntStateOf(initialDate.day) }
 
     val maxDaysInMonth = remember(selectedYear, selectedMonth) {
         try {

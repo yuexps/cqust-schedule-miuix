@@ -42,6 +42,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.number
 import top.msfxp.schedule.util.minutesUntil
 import top.msfxp.schedule.util.nowLocalTime
 import top.msfxp.schedule.util.plusDays
@@ -220,7 +221,7 @@ private fun ScheduleGridHeader(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "${pageMondayDate.monthNumber}",
+                text = "${pageMondayDate.month.number}",
                 style = MiuixTheme.textStyles.title3.copy(fontWeight = FontWeight.Bold, fontSize = 15.sp),
                 color = MiuixTheme.colorScheme.onSurface
             )
@@ -254,7 +255,7 @@ private fun ScheduleGridHeader(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = stringResource(Res.string.schedule_date_short_format, date.monthNumber, date.dayOfMonth),
+                    text = stringResource(Res.string.schedule_date_short_format, date.month.number, date.day),
                     style = MiuixTheme.textStyles.footnote2.copy(
                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                         fontSize = 10.5.sp
