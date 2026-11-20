@@ -383,7 +383,8 @@ private fun showIosToast(message: String) {
         val (contentWidth, contentHeight) = toast
             .sizeThatFits(CGSizeMake(maxContentWidth, Double.MAX_VALUE))
             .useContents { width to height }
-        toast.frame = CGRectMake(0.0, 0.0, contentWidth + 32.0, contentHeight + 20.0)
+        // UIView.frame 在 Kotlin/Native 中为只读属性，需通过 setFrame 赋值
+        toast.setFrame(CGRectMake(0.0, 0.0, contentWidth + 32.0, contentHeight + 20.0))
         toast.center = CGPointMake(windowWidth / 2.0, windowHeight * 0.8)
         window.addSubview(toast)
 
