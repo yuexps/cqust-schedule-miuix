@@ -1,40 +1,25 @@
 package top.msfxp.schedule.ui.settings.subscreens
 
 import android.Manifest
+import android.content.Context
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.msfxp.schedule.R
 import top.msfxp.schedule.ui.settings.SettingsViewModel
 import top.msfxp.schedule.util.PermissionHelper
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
-import top.yukonga.miuix.kmp.icon.extended.Info
-import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 
-private val RemindMinutesOptions = listOf(5, 10, 15, 20, 30, 45, 60)
-
-// 课前通知提醒设置界面
+// Android 端处理通知与精确闹钟权限，页面内容由 shared 提供。
 @Composable
 fun PreClassReminderScreen(
     onBack: () -> Unit,
@@ -43,27 +28,166 @@ fun PreClassReminderScreen(
     val uiState by viewModel.uiState.collectAsState()
     val settings = uiState.appSettings
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+    val feedback = AndroidReminderFeedback(
+        snackbarHostState = snackbarHostState,
+        scope = scope,
+        messages = AndroidReminderMessages(
+            notificationPermissionNotice = stringResource(R.string.reminder_permission_notice_toast),
+            exactAlarmPermissionNotice = stringResource(R.string.reminder_test_alarm_permission_toast),
+            testSent = stringResource(R.string.reminder_test_sent_toast),
+            testDelayed = stringResource(R.string.reminder_test_delayed_scheduled_toast)
+        )
+    )
+    val permissions = rememberAndroidReminderPermissions(context, viewModel, feedback)
 
-    // 生命周期返回时刷新权限状态并处理待确认开启
+    PreClassReminderContent(
+        settings = settings,
+        callbacks = createAndroidReminderCallbacks(onBack, viewModel, permissions, feedback),
+        presentation = PreClassReminderPresentation(
+            hintText = stringResource(R.string.reminder_hint_text)
+        ),
+        snackbarHostState = snackbarHostState
+    )
+}
+
+private fun createAndroidReminderCallbacks(
+    onBack: () -> Unit,
+    viewModel: SettingsViewModel,
+    permissions: AndroidReminderPermissions,
+    feedback: AndroidReminderFeedback
+): PreClassReminderCallbacks = PreClassReminderCallbacks(
+    onBack = onBack,
+    onReminderEnabledChange = { enable ->
+        if (enable) {
+            if (permissions.isNotificationEnabled) viewModel.updateReminderEnabled(true)
+            else permissions.requestForToggle()
+        } else {
+            permissions.clearPendingEnable()
+            viewModel.updateReminderEnabled(false)
+        }
+    },
+    onRemindMinutesChange = viewModel::updateRemindBeforeMinutes,
+    onImmediateTest = {
+        if (permissions.isNotificationEnabled) {
+            viewModel.sendTestNotification()
+            feedback.show(feedback.messages.testSent)
+        } else {
+            permissions.requestForTest()
+        }
+    },
+    onDelayedTest = {
+        if (!permissions.isNotificationEnabled) {
+            permissions.requestForTest()
+        } else if (!permissions.isExactAlarmEnabled) {
+            feedback.show(feedback.messages.exactAlarmPermissionNotice)
+            permissions.openExactAlarmSettings()
+        } else {
+            viewModel.scheduleDelayed30sTestNotification()
+            feedback.show(feedback.messages.testDelayed)
+        }
+    }
+)
+
+private data class AndroidReminderMessages(
+    val notificationPermissionNotice: String,
+    val exactAlarmPermissionNotice: String,
+    val testSent: String,
+    val testDelayed: String
+)
+
+private class AndroidReminderFeedback(
+    private val snackbarHostState: SnackbarHostState,
+    private val scope: CoroutineScope,
+    val messages: AndroidReminderMessages
+) {
+    fun show(message: String) {
+        scope.launch { snackbarHostState.showSnackbar(message) }
+    }
+}
+
+private data class AndroidReminderPermissions(
+    val isNotificationEnabled: Boolean,
+    val isExactAlarmEnabled: Boolean,
+    val requestForToggle: () -> Unit,
+    val requestForTest: () -> Unit,
+    val clearPendingEnable: () -> Unit,
+    val openExactAlarmSettings: () -> Unit
+)
+
+@Composable
+private fun rememberAndroidReminderPermissions(
+    context: Context,
+    viewModel: SettingsViewModel,
+    feedback: AndroidReminderFeedback
+): AndroidReminderPermissions {
     var refreshTrigger by remember { mutableIntStateOf(0) }
-    var pendingEnableOnResume by remember { mutableStateOf(false) }
+    val pendingEnableOnResume = rememberPendingReminderEnableOnResume(
+        context = context,
+        viewModel = viewModel,
+        feedback = feedback,
+        onRefresh = { refreshTrigger++ }
+    )
+
+    val isNotificationEnabled = remember(refreshTrigger) {
+        PermissionHelper.isNotificationGranted(context)
+    }
+    val isExactAlarmEnabled = remember(refreshTrigger) {
+        PermissionHelper.isExactAlarmGranted(context)
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        refreshTrigger++
+        if (granted) viewModel.updateReminderEnabled(true)
+        else feedback.show(feedback.messages.notificationPermissionNotice)
+    }
+
+    return AndroidReminderPermissions(
+        isNotificationEnabled = isNotificationEnabled,
+        isExactAlarmEnabled = isExactAlarmEnabled,
+        requestForToggle = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                pendingEnableOnResume.value = true
+                PermissionHelper.openNotificationSettings(context)
+            }
+        },
+        requestForTest = {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                PermissionHelper.openNotificationSettings(context)
+            }
+        },
+        clearPendingEnable = { pendingEnableOnResume.value = false },
+        openExactAlarmSettings = { PermissionHelper.openExactAlarmSettings(context) }
+    )
+}
+
+@Composable
+private fun rememberPendingReminderEnableOnResume(
+    context: Context,
+    viewModel: SettingsViewModel,
+    feedback: AndroidReminderFeedback,
+    onRefresh: () -> Unit
+): MutableState<Boolean> {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val pendingEnableOnResume = remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                refreshTrigger++
-                if (pendingEnableOnResume) {
+                onRefresh()
+                if (pendingEnableOnResume.value) {
                     if (PermissionHelper.isNotificationGranted(context)) {
                         viewModel.updateReminderEnabled(true)
                     } else {
-                        scope.launch {
-                            snackbarHostState.showSnackbar(context.getString(R.string.reminder_permission_notice_toast))
-                        }
+                        feedback.show(feedback.messages.notificationPermissionNotice)
                     }
-                    pendingEnableOnResume = false
+                    pendingEnableOnResume.value = false
                 }
             }
         }
@@ -71,184 +195,5 @@ fun PreClassReminderScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val isNotificationEnabled = remember(refreshTrigger) {
-        PermissionHelper.isNotificationGranted(context)
-    }
-
-    val isExactAlarmEnabled = remember(refreshTrigger) {
-        PermissionHelper.isExactAlarmGranted(context)
-    }
-
-    val postNotificationLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        refreshTrigger++
-        if (granted) {
-            viewModel.updateReminderEnabled(true)
-        } else {
-            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.reminder_permission_notice_toast)) }
-        }
-    }
-
-    val remindMinutesLabels = RemindMinutesOptions.map {
-        stringResource(R.string.calendar_sync_remind_format, it)
-    }
-
-    val currentMinutesIndex = remember(settings.remindBeforeMinutes) {
-        val idx = RemindMinutesOptions.indexOf(settings.remindBeforeMinutes)
-        if (idx >= 0) idx else 2
-    }
-
-    Scaffold(
-        snackbarHost = { SnackbarHost(state = snackbarHostState) },
-        topBar = {
-            SmallTopAppBar(
-                title = stringResource(R.string.reminder_title),
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = MiuixIcons.ChevronBackward,
-                            contentDescription = stringResource(R.string.common_back),
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        LazyColumn(
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // 提醒开关与提前时间
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        SwitchPreference(
-                            title = stringResource(R.string.reminder_switch_title),
-                            summary = stringResource(R.string.reminder_switch_desc),
-                            checked = settings.reminderEnabled,
-                            onCheckedChange = { enable ->
-                                if (enable) {
-                                    if (isNotificationEnabled) {
-                                        viewModel.updateReminderEnabled(true)
-                                    } else {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                        } else {
-                                            pendingEnableOnResume = true
-                                            PermissionHelper.openNotificationSettings(context)
-                                        }
-                                    }
-                                } else {
-                                    pendingEnableOnResume = false
-                                    viewModel.updateReminderEnabled(false)
-                                }
-                            }
-                        )
-
-                        if (settings.reminderEnabled) {
-                            OverlayDropdownPreference(
-                                title = stringResource(R.string.reminder_time_title),
-                                items = remindMinutesLabels,
-                                selectedIndex = currentMinutesIndex,
-                                onSelectedIndexChange = { index ->
-                                    val minutes = RemindMinutesOptions.getOrElse(index) { 15 }
-                                    viewModel.updateRemindBeforeMinutes(minutes)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // 模拟测试卡片
-            if (settings.showTestFeatures) {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(16.dp))
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            ArrowPreference(
-                                title = stringResource(R.string.reminder_test_immediate_title),
-                                summary = stringResource(R.string.reminder_test_immediate_desc),
-                                onClick = {
-                                    if (!isNotificationEnabled) {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                        } else {
-                                            PermissionHelper.openNotificationSettings(context)
-                                        }
-                                    } else {
-                                        viewModel.sendTestNotification()
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(context.getString(R.string.reminder_test_sent_toast))
-                                        }
-                                    }
-                                }
-                            )
-
-                            ArrowPreference(
-                                title = stringResource(R.string.reminder_test_delayed_title),
-                                summary = stringResource(R.string.reminder_test_delayed_desc),
-                                onClick = {
-                                    if (!isNotificationEnabled) {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            postNotificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                        } else {
-                                            PermissionHelper.openNotificationSettings(context)
-                                        }
-                                    } else if (!isExactAlarmEnabled) {
-                                        scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.reminder_test_alarm_permission_toast)) }
-                                        PermissionHelper.openExactAlarmSettings(context)
-                                    } else {
-                                        viewModel.scheduleDelayed30sTestNotification()
-                                        scope.launch {
-                                            snackbarHostState.showSnackbar(context.getString(R.string.reminder_test_delayed_scheduled_toast))
-                                        }
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-
-            // 说明文本
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Info,
-                        contentDescription = null,
-                        tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier
-                            .size(14.dp)
-                            .offset(y = 1.5.dp)
-                    )
-                    Text(
-                        text = stringResource(R.string.reminder_hint_text),
-                        style = MiuixTheme.textStyles.footnote2.copy(lineHeight = 18.sp),
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-    }
+    return pendingEnableOnResume
 }

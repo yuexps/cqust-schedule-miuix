@@ -22,6 +22,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.number
 import okio.Path.Companion.toPath
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.skia.Image
 import org.koin.dsl.module
 import platform.Foundation.NSData
@@ -61,6 +62,12 @@ import top.msfxp.schedule.data.repository.ScheduleRepository
 import top.msfxp.schedule.data.repository.SettingsRepository
 import top.msfxp.schedule.di.commonModule
 import top.msfxp.schedule.domain.EffectiveScheduleResolver
+import top.msfxp.schedule.shared.resources.Res
+import top.msfxp.schedule.shared.resources.calendar_exam_title_format
+import top.msfxp.schedule.shared.resources.exam_seat_number_format
+import top.msfxp.schedule.shared.resources.notification_class_starting
+import top.msfxp.schedule.shared.resources.test_notification_title
+import top.msfxp.schedule.shared.resources.test_notification_wakeup_title
 import top.msfxp.schedule.util.atTimeEpochMillis
 import top.msfxp.schedule.util.currentEpochMillis
 import top.msfxp.schedule.util.iosCoroutineExceptionHandler
@@ -150,12 +157,6 @@ object IosPlatformStringProvider : PlatformStringProvider {
     override fun testCourseDefaultName(): String = "高等数学A(一)"
     override fun testCourseDefaultLocation(): String = "虎溪校区 H1201"
     override fun testCourseDefaultTeacher(): String = "张老师"
-}
-
-// iOS 端日历同步占位（后期按需扩展 EventKit）
-object IosNoOpCalendarSync : PlatformCalendarSync {
-    override suspend fun syncCurrentScheduleToCalendar(): Boolean = false
-    override suspend fun deleteScheduleCalendar(): Boolean = false
 }
 
 // iOS 端版本发布跳转实现（直接打开浏览器访问 Release 页）
@@ -287,13 +288,10 @@ class IosNotificationScheduler(
                     minute = (triggerTotalMinutes % 60).toLong()
                     second = 0
                 }
+                val bodyText = buildNotificationBody(listOf(ev.displayLocation, ev.teacher))
                 val content = UNMutableNotificationContent().apply {
-                    setTitle("即将上课：${ev.inlineTitle}")
-                    setBody(
-                        listOf(ev.displayLocation, ev.teacher)
-                            .filter { it.isNotBlank() }
-                            .joinToString(" · ")
-                    )
+                    setTitle(ev.inlineTitle)
+                    setBody(bodyText)
                     setSound(UNNotificationSound.defaultSound)
                 }
                 val trigger = UNCalendarNotificationTrigger.triggerWithDateMatchingComponents(
@@ -326,12 +324,15 @@ class IosNotificationScheduler(
                     minute = (triggerTotalMinutes % 60).toLong()
                     second = 0
                 }
+                val seatText = exam.seatNo
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { getString(Res.string.exam_seat_number_format, it) }
+                    .orEmpty()
+                val titleText = getString(Res.string.calendar_exam_title_format, exam.courseName)
+                val bodyText = buildNotificationBody(listOf(exam.displayPosition, seatText), separator = " ")
                 val content = UNMutableNotificationContent().apply {
-                    setTitle("考试提醒：${exam.courseName}")
-                    setBody(
-                        listOfNotNull(exam.displayPosition, exam.seatNo?.takeIf { it.isNotBlank() }?.let { "座位 $it" })
-                            .joinToString(" · ")
-                    )
+                    setTitle(titleText)
+                    setBody(bodyText)
                     setSound(UNNotificationSound.defaultSound)
                 }
                 val trigger = UNCalendarNotificationTrigger.triggerWithDateMatchingComponents(
@@ -349,29 +350,52 @@ class IosNotificationScheduler(
     override fun sendTestNotification(courseName: String, position: String, teacher: String) {
         requestNotificationPermissionIfNeeded { granted ->
             if (!granted) return@requestNotificationPermissionIfNeeded
-            val content = UNMutableNotificationContent().apply {
-                setTitle("[测试] 即将上课：$courseName")
-                setBody("$position · $teacher")
-                setSound(UNNotificationSound.defaultSound)
+            scope.launch {
+                postTestNotification(
+                    identifier = "cqust_test_now",
+                    title = getString(Res.string.test_notification_title, courseName),
+                    body = buildNotificationBody(listOf(position, teacher)),
+                    delaySeconds = 1.0
+                )
             }
-            val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(1.0, repeats = false)
-            val request = UNNotificationRequest.requestWithIdentifier("cqust_test_now", content, trigger)
-            UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest(request, null)
         }
     }
 
     override fun scheduleDelayed30sTestNotification(courseName: String, position: String, teacher: String) {
         requestNotificationPermissionIfNeeded { granted ->
             if (!granted) return@requestNotificationPermissionIfNeeded
-            val content = UNMutableNotificationContent().apply {
-                setTitle("[30秒后台测试] 即将上课：$courseName")
-                setBody("$position · $teacher")
-                setSound(UNNotificationSound.defaultSound)
+            scope.launch {
+                postTestNotification(
+                    identifier = "cqust_test_30s",
+                    title = getString(Res.string.test_notification_wakeup_title, courseName),
+                    body = buildNotificationBody(listOf(position, teacher)),
+                    delaySeconds = 30.0
+                )
             }
-            val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(30.0, repeats = false)
-            val request = UNNotificationRequest.requestWithIdentifier("cqust_test_30s", content, trigger)
-            UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest(request, null)
         }
+    }
+
+    // 构建通知正文：拼接非空片段，全空时回退“即将开始上课”
+    private suspend fun buildNotificationBody(parts: List<String>, separator: String = " · "): String =
+        parts.filter { it.isNotBlank() }
+            .joinToString(separator)
+            .ifBlank { getString(Res.string.notification_class_starting) }
+
+    // 发送延迟指定秒数的测试通知
+    private suspend fun postTestNotification(
+        identifier: String,
+        title: String,
+        body: String,
+        delaySeconds: Double
+    ) {
+        val content = UNMutableNotificationContent().apply {
+            setTitle(title)
+            setBody(body)
+            setSound(UNNotificationSound.defaultSound)
+        }
+        val trigger = UNTimeIntervalNotificationTrigger.triggerWithTimeInterval(delaySeconds, repeats = false)
+        val request = UNNotificationRequest.requestWithIdentifier(identifier, content, trigger)
+        UNUserNotificationCenter.currentNotificationCenter().addNotificationRequest(request, null)
     }
 
     override suspend fun testToggleModeImmediately(mode: AutoControlMode) = Unit
@@ -386,7 +410,12 @@ val iosModule = module {
     single { createIosPreferencesDataStore() }
     single<PlatformWallpaperStorage> { IosPlatformWallpaperStorage }
     single<PlatformStringProvider> { IosPlatformStringProvider }
-    single<PlatformCalendarSync> { IosNoOpCalendarSync }
+    single(createdAtStart = true) {
+        IosCalendarSync(get(), get(), get()).apply {
+            startObserving()
+        }
+    }
+    single<PlatformCalendarSync> { get<IosCalendarSync>() }
     single<PlatformReleaseInstaller> { IosPlatformReleaseInstaller }
 
     single(createdAtStart = true) {

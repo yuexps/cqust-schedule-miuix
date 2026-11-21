@@ -8,7 +8,6 @@ struct iOSApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .ignoresSafeArea(.all)
                 .onChange(of: scenePhase) { newPhase in
                     if newPhase == .active {
                         MainViewControllerKt.onAppForeground()

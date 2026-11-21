@@ -5,7 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import top.msfxp.schedule.navigation.Route
-import top.msfxp.schedule.platform.PlatformSubScreenRegistry
+import top.msfxp.schedule.platform.PlatformSubScreens
 import top.msfxp.schedule.ui.courses.CourseOverviewScreen
 import top.msfxp.schedule.ui.login.CqustLoginScreen
 import top.msfxp.schedule.ui.schedule.WeeklyScheduleScreen
@@ -21,14 +21,13 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 
 // 应用跨平台根导航组件
 @Composable
-fun App() {
+fun App(platformSubScreens: PlatformSubScreens) {
     val themeController = remember { ThemeController(ColorSchemeMode.System) }
     val backStack = rememberNavBackStack<Route>(Route.Schedule)
     // 目标页已在栈顶时忽略，防止同路由重复入栈崩溃
     val navigate: (Route) -> Unit = remember {
         { route -> if (backStack.lastOrNull() != route) backStack.add(route) }
     }
-    val subScreens = PlatformSubScreenRegistry.screens
 
     MiuixTheme(controller = themeController) {
         Surface(
@@ -95,21 +94,24 @@ fun App() {
 
                 // 课前通知提醒页面
                 entry<Route.PreClassReminderSettings> {
-                    subScreens.PreClassReminder {
+                    platformSubScreens.preClassReminder {
                         backStack.removeLastOrNull()
                     }
                 }
 
                 // 日历日程同步页面
                 entry<Route.CalendarSyncSettings> {
-                    subScreens.CalendarSync {
+                    platformSubScreens.calendarSync {
                         backStack.removeLastOrNull()
                     }
                 }
 
                 // 课中自动化设置页面
                 entry<Route.ClassAutomationSettings> {
-                    subScreens.ClassAutomation(
+                    val classAutomation = requireNotNull(platformSubScreens.classAutomation) {
+                        "当前平台未注册课中自动化页面"
+                    }
+                    classAutomation(
                         { backStack.removeLastOrNull() },
                         { navigate(Route.PermissionManagement) }
                     )
@@ -117,7 +119,10 @@ fun App() {
 
                 // 权限管理页面
                 entry<Route.PermissionManagement> {
-                    subScreens.PermissionManagement {
+                    val permissionManagement = requireNotNull(platformSubScreens.permissionManagement) {
+                        "当前平台未注册权限管理页面"
+                    }
+                    permissionManagement {
                         backStack.removeLastOrNull()
                     }
                 }

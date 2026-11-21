@@ -78,7 +78,7 @@ import kotlin.random.Random
 actual object PlatformConfig {
     actual val capabilities: PlatformCapabilities = PlatformCapabilities(
         supportsPreClassReminder = true,
-        supportsCalendarSync = false,
+        supportsCalendarSync = true,
         supportsClassAutomation = false,
         supportsPermissionManagement = false,
         supportsInAppApkUpdate = false,

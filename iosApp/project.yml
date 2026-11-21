@@ -33,6 +33,8 @@ targets:
               NSExceptionAllowsInsecureHTTPLoads: true
               NSExceptionRequiresForwardSecrecy: false
         NSPhotoLibraryUsageDescription: 用于选取相册图片作为课表壁纸
+        NSCalendarsUsageDescription: 用于将课程与考试日程同步到系统日历
+        NSCalendarsFullAccessUsageDescription: 用于将课程与考试日程同步到系统日历
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIRequiredDeviceCapabilities:

@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import top.msfxp.schedule.platform.PlatformSubScreenRegistry
 import top.msfxp.schedule.platform.PlatformSubScreens
 import top.msfxp.schedule.ui.settings.subscreens.CalendarSyncScreen
 import top.msfxp.schedule.ui.settings.subscreens.ClassAutomationScreen
@@ -16,20 +15,20 @@ import top.msfxp.schedule.util.AppActionHelper
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        PlatformSubScreenRegistry.screens = PlatformSubScreens(
-            PreClassReminder = { onBack -> PreClassReminderScreen(onBack = onBack) },
-            CalendarSync = { onBack -> CalendarSyncScreen(onBack = onBack) },
-            ClassAutomation = { onBack, onNavigateToPermissions ->
+        val platformSubScreens = PlatformSubScreens(
+            preClassReminder = { onBack -> PreClassReminderScreen(onBack = onBack) },
+            calendarSync = { onBack -> CalendarSyncScreen(onBack = onBack) },
+            classAutomation = { onBack, onNavigateToPermissions ->
                 ClassAutomationScreen(
                     onBack = onBack,
                     onNavigateToPermissions = onNavigateToPermissions
                 )
             },
-            PermissionManagement = { onBack -> PermissionManagementScreen(onBack = onBack) }
+            permissionManagement = { onBack -> PermissionManagementScreen(onBack = onBack) }
         )
         enableEdgeToEdge()
         setContent {
-            App()
+            App(platformSubScreens)
         }
     }
 

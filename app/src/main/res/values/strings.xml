@@ -141,11 +141,11 @@
     <string name="calendar_sync_permission_needed_toast">需要系统日历权限才能同步日程</string>
     <string name="calendar_sync_success_toast">已成功同步至系统日历</string>
     <string name="calendar_sync_fail_toast">同步失败，请检查行课起始日期是否正确</string>
-    <string name="calendar_sync_account_hint">课程将写入独立的“重科课表”日历账户，支持在系统日历中随时开启或隐藏，不影响个人日程。</string>
+    <string name="calendar_sync_account_hint">课程将写入专属的“重科课表”日历，支持在系统日历中随时开启或隐藏，不影响个人日程。</string>
     <string name="calendar_delete_item_title">删除系统日历日程</string>
     <string name="calendar_delete_desc">从手机系统日历中移除已同步的全部课程</string>
     <string name="calendar_delete_dialog_title">删除系统日历日程</string>
-    <string name="calendar_delete_dialog_message">确定要从系统日历中删除所有已同步的课程日程和“重科课表”日历账户吗？此操作不会影响应用内课表。</string>
+    <string name="calendar_delete_dialog_message">确定要从系统日历中删除所有已同步的课程日程和“重科课表”日历吗？此操作不会影响应用内课表。</string>
     <string name="calendar_delete_dialog_confirm">删除</string>
     <string name="calendar_delete_success_toast">已从系统日历中删除课程日程与账户</string>
     <string name="calendar_delete_fail_toast">删除失败，请检查日历权限</string>
