@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.rememberScrollState
@@ -451,10 +452,12 @@ private fun ScheduleWallpaperBackground(
                 .graphicsLayer { alpha = wallpaperAlpha },
             contentScale = ContentScale.Crop
         )
+        // 遮罩色随文字反色：深色主题用黑遮罩，浅色主题用白遮罩
+        val maskColor = if (MiuixTheme.colorScheme.onSurface.luminance() > 0.5f) Color.Black else Color.White
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = wallpaperMaskDim * wallpaperAlpha))
+                .background(maskColor.copy(alpha = wallpaperMaskDim * wallpaperAlpha))
         )
     }
 }

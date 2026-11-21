@@ -283,7 +283,7 @@
     <string name="personalization_wallpaper_clear">清除壁纸</string>
     <string name="personalization_wallpaper_custom_status">已设置自定义壁纸</string>
     <string name="personalization_wallpaper_default_status">未设置壁纸</string>
-    <string name="personalization_wallpaper_mask_dim_title">壁纸暗度: %1$d%%</string>
+    <string name="personalization_wallpaper_mask_dim_title">壁纸遮罩: %1$d%%</string>
     <string name="personalization_card_alpha_title">课程卡片不透明度: %1$d%%</string>
     <string name="personalization_section_palette">课程配色</string>
     <string name="personalization_color_dialog_title">编辑色块 #%1$d</string>
