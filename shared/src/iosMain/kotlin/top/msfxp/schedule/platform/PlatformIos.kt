@@ -331,6 +331,7 @@ object IosPlatformExternalHandler : PlatformExternalHandler {
     override fun getAvailableMapApps(): List<PlatformMapAppItem> {
         val app = platform.UIKit.UIApplication.sharedApplication
         val schemes = listOf(
+            MapAppType.APPLE to "maps://",
             MapAppType.AMAP to "iosamap://",
             MapAppType.BAIDU to "baidumap://",
             MapAppType.TENCENT to "qqmap://"
@@ -343,7 +344,12 @@ object IosPlatformExternalHandler : PlatformExternalHandler {
 
     override fun openMapWalkingNavigation(type: MapAppType, destination: String): Boolean {
         val encoded = destination.encodeURLParameter()
+        if (type == MapAppType.APPLE) {
+            return openBrowser("maps://?daddr=$encoded&dirflg=w") ||
+                openBrowser("https://maps.apple.com/?daddr=$encoded&dirflg=w")
+        }
         val urlStr = when (type) {
+            MapAppType.APPLE -> "maps://?daddr=$encoded&dirflg=w"
             MapAppType.AMAP -> "iosamap://path?sourceApplication=cqust_schedule&dname=$encoded&dev=0&t=2"
             MapAppType.BAIDU -> "baidumap://map/direction?destination=$encoded&mode=walking&src=ios.cqust.schedule"
             MapAppType.TENCENT -> "qqmap://map/routeplan?type=walk&from=我的位置&to=$encoded&referer=cqust_schedule"

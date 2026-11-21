@@ -288,84 +288,84 @@ fun WeeklyScheduleScreen(
             }
         }
         }
-    }
 
-    // 周次选择抽屉
-    WeekSelectorSheet(
-        show = showWeekSelector,
-        totalWeeks = uiState.totalWeeks,
-        currentWeekNumber = uiState.currentWeekNumber,
-        selectedWeek = currentBrowsingWeek,
-        weekCourseCountMap = uiState.weekCourseCountMap,
-        onWeekSelected = { week ->
-            showWeekSelector = false
-            scope.launch {
-                pagerState.animateScrollToPage((week - 1).coerceIn(0, uiState.totalWeeks - 1))
-            }
-        },
-        onDismissRequest = { showWeekSelector = false }
-    )
+        // 周次选择抽屉（置于 Scaffold 内供 OverlayBottomSheet 宿主渲染）
+        WeekSelectorSheet(
+            show = showWeekSelector,
+            totalWeeks = uiState.totalWeeks,
+            currentWeekNumber = uiState.currentWeekNumber,
+            selectedWeek = currentBrowsingWeek,
+            weekCourseCountMap = uiState.weekCourseCountMap,
+            onWeekSelected = { week ->
+                showWeekSelector = false
+                scope.launch {
+                    pagerState.animateScrollToPage((week - 1).coerceIn(0, uiState.totalWeeks - 1))
+                }
+            },
+            onDismissRequest = { showWeekSelector = false }
+        )
 
-    // 课表单元详情抽屉
-    CellDetailSheet(
-        cell = selectedCell,
-        currentWeekNumber = currentBrowsingWeek,
-        totalWeeks = uiState.totalWeeks,
-        currentSemesterId = uiState.currentSemesterId,
-        courseColors = uiState.courseColors,
-        adjustmentsList = adjustmentsList,
-        colorIndexResolver = { exam ->
-            resolveExamColorIndex(exam, uiState.courseColorIndexMap)
-        },
-        onColorIndexSelected = { courseId, newIndex ->
-            viewModel.updateCourseColor(courseId, newIndex)
-            selectedCell = selectedCell?.let { cell ->
-                cell.copy(
-                    courses = cell.courses.map { ev ->
-                        if (ev.courseId == courseId) {
-                            ev.copy(colorIndex = newIndex)
-                        } else ev
-                    }
+        // 课表单元详情抽屉（置于 Scaffold 内供 OverlayBottomSheet 宿主渲染）
+        CellDetailSheet(
+            cell = selectedCell,
+            currentWeekNumber = currentBrowsingWeek,
+            totalWeeks = uiState.totalWeeks,
+            currentSemesterId = uiState.currentSemesterId,
+            courseColors = uiState.courseColors,
+            adjustmentsList = adjustmentsList,
+            colorIndexResolver = { exam ->
+                resolveExamColorIndex(exam, uiState.courseColorIndexMap)
+            },
+            onColorIndexSelected = { courseId, newIndex ->
+                viewModel.updateCourseColor(courseId, newIndex)
+                selectedCell = selectedCell?.let { cell ->
+                    cell.copy(
+                        courses = cell.courses.map { ev ->
+                            if (ev.courseId == courseId) {
+                                ev.copy(colorIndex = newIndex)
+                            } else ev
+                        }
+                    )
+                }
+            },
+            onMoveCourse = { adj ->
+                viewModel.moveCourse(adj)
+                selectedCell = null
+            },
+            onSwapCourses = { adjA, adjB ->
+                viewModel.swapCourses(adjA, adjB)
+                selectedCell = null
+            },
+            onMarkDeleted = { adj ->
+                viewModel.markCourseDeleted(adj)
+                selectedCell = null
+            },
+            onDeleteAdjustment = { adjId ->
+                viewModel.deleteAdjustment(adjId)
+                selectedCell = null
+            },
+            onClearAllAdjustments = {
+                viewModel.clearAllAdjustments()
+            },
+            onGetAdjustmentForEvent = { cId, eventType, w, d, s ->
+                viewModel.getAdjustmentForEvent(cId, eventType, w, d, s)
+            },
+            getCourseAtSlot = { w, d, s, e, excludeCourseId, excludeStartSection ->
+                viewModel.getCourseAtSlot(
+                    week = w,
+                    day = d,
+                    startSection = s,
+                    endSection = e,
+                    excludeCourseId = excludeCourseId,
+                    excludeStartSection = excludeStartSection
                 )
-            }
-        },
-        onMoveCourse = { adj ->
-            viewModel.moveCourse(adj)
-            selectedCell = null
-        },
-        onSwapCourses = { adjA, adjB ->
-            viewModel.swapCourses(adjA, adjB)
-            selectedCell = null
-        },
-        onMarkDeleted = { adj ->
-            viewModel.markCourseDeleted(adj)
-            selectedCell = null
-        },
-        onDeleteAdjustment = { adjId ->
-            viewModel.deleteAdjustment(adjId)
-            selectedCell = null
-        },
-        onClearAllAdjustments = {
-            viewModel.clearAllAdjustments()
-        },
-        onGetAdjustmentForEvent = { cId, eventType, w, d, s ->
-            viewModel.getAdjustmentForEvent(cId, eventType, w, d, s)
-        },
-        getCourseAtSlot = { w, d, s, e, excludeCourseId, excludeStartSection ->
-            viewModel.getCourseAtSlot(
-                week = w,
-                day = d,
-                startSection = s,
-                endSection = e,
-                excludeCourseId = excludeCourseId,
-                excludeStartSection = excludeStartSection
-            )
-        },
-        getExamAtSlot = { w, d, s, e ->
-            viewModel.getExamAtSlot(w, d, s, e)
-        },
-        onDismissRequest = { selectedCell = null }
-    )
+            },
+            getExamAtSlot = { w, d, s, e ->
+                viewModel.getExamAtSlot(w, d, s, e)
+            },
+            onDismissRequest = { selectedCell = null }
+        )
+    }
 
     // 发现新版本主动弹窗 (24小时静默检查发现新版本时触发)
     if (showUpdateDialog && updateRelease != null) {

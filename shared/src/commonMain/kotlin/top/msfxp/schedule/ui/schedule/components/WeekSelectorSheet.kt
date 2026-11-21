@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.msfxp.schedule.shared.resources.*
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
 
 // 教学周次快速选择抽屉
 @Composable
@@ -31,10 +31,8 @@ fun WeekSelectorSheet(
     onWeekSelected: (Int) -> Unit,
     onDismissRequest: () -> Unit
 ) {
-    if (!show) return
-
-    WindowBottomSheet(
-        show = true,
+    OverlayBottomSheet(
+        show = show,
         title = stringResource(Res.string.week_selector_title),
         onDismissRequest = onDismissRequest
     ) {

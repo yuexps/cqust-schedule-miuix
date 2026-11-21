@@ -19,7 +19,6 @@ import top.msfxp.schedule.platform.PlatformWallpaperStorage
 import top.msfxp.schedule.platform.createAndroidPreferencesDataStore
 import top.msfxp.schedule.service.CalendarSyncHelper
 import top.msfxp.schedule.service.CourseAlarmObserver
-import top.msfxp.schedule.ui.settings.PersonalizationViewModel
 
 // Android 应用 Koin 依赖注入模块
 val appModule = module {
@@ -54,7 +53,4 @@ val appModule = module {
             startObserving()
         }
     }
-
-    // Android 个性化视图模型（含相册裁剪支持）
-    viewModel { PersonalizationViewModel(get(), get()) }
 }

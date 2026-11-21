@@ -11,6 +11,7 @@ import top.msfxp.schedule.ui.login.CqustLoginScreen
 import top.msfxp.schedule.ui.schedule.WeeklyScheduleScreen
 import top.msfxp.schedule.ui.settings.SettingsScreen
 import top.msfxp.schedule.ui.settings.subscreens.AboutScreen
+import top.msfxp.schedule.ui.settings.subscreens.PersonalizationScreen
 import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
@@ -83,11 +84,13 @@ fun App() {
                     )
                 }
 
-                // 个性化设置页面
+                // 个性化设置页面（双端共享 UI）
                 entry<Route.PersonalizationSettings> {
-                    subScreens.Personalization {
-                        backStack.removeLastOrNull()
-                    }
+                    PersonalizationScreen(
+                        onBack = {
+                            backStack.removeLastOrNull()
+                        }
+                    )
                 }
 
                 // 课前通知提醒页面

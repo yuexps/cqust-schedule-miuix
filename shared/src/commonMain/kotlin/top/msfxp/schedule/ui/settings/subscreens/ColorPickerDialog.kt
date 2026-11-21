@@ -25,9 +25,8 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Check
 import top.yukonga.miuix.kmp.icon.basic.Close
 import top.yukonga.miuix.kmp.icon.extended.Clear
-import top.yukonga.miuix.kmp.theme.LocalDismissState
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
 
 // 课程颜色编辑抽屉
 @Composable
@@ -39,22 +38,14 @@ fun ColorPickerDialog(
     onDismissRequest: () -> Unit,
     onConfirm: (Color) -> Unit
 ) {
-    if (!show) return
-
     var workingColor by remember(show, initialColor) { mutableStateOf(initialColor) }
 
-    WindowBottomSheet(
+    OverlayBottomSheet(
         show = show,
         title = stringResource(Res.string.personalization_color_dialog_title, slotIndex + 1),
         onDismissRequest = onDismissRequest,
         startAction = {
-            val dismiss = LocalDismissState.current
-            IconButton(
-                onClick = {
-                    dismiss?.invoke()
-                    onDismissRequest()
-                }
-            ) {
+            IconButton(onClick = onDismissRequest) {
                 Icon(
                     imageVector = MiuixIcons.Basic.Close,
                     contentDescription = stringResource(Res.string.common_cancel)
@@ -62,11 +53,9 @@ fun ColorPickerDialog(
             }
         },
         endAction = {
-            val dismiss = LocalDismissState.current
             IconButton(
                 onClick = {
                     onConfirm(workingColor)
-                    dismiss?.invoke()
                     onDismissRequest()
                 }
             ) {

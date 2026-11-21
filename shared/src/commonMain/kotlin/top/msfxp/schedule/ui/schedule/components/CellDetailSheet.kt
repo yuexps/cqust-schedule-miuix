@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,7 +36,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 
 // 详情页条目（考试 > 实践 > 课程）
 internal sealed interface CellDetailPage {
@@ -63,21 +65,35 @@ fun CellDetailSheet(
     getCourseAtSlot: ((week: Int, day: Int, startSection: Int, endSection: Int, excludeCourseId: String, excludeStartSection: Int) -> CourseEventWithMeta?)? = null,
     onDismissRequest: () -> Unit
 ) {
-    if (cell == null) return
-    val pages = remember(cell) {
-        cell.exams.map { CellDetailPage.Exam(it) } +
-            cell.courses
+    // 退场动画期间保留上一次非空单元数据，避免内容突然空白
+    var cachedCell by remember { mutableStateOf<ScheduleGridCell?>(null) }
+    if (cell != null) {
+        cachedCell = cell
+    }
+    val displayCell = cell ?: cachedCell
+    val pages = remember(displayCell) {
+        if (displayCell == null) emptyList()
+        else displayCell.exams.map { CellDetailPage.Exam(it) } +
+            displayCell.courses
                 .sortedByDescending { it.isPractical }
                 .map { CellDetailPage.Course(it) }
     }
-    if (pages.isEmpty()) return
+    val isSheetVisible = cell != null && pages.isNotEmpty()
 
     var selectedNavPosition by remember { mutableStateOf<String?>(null) }
     var showEditSheet by remember { mutableStateOf(false) }
-    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val pagerState = rememberPagerState(pageCount = { pages.size.coerceAtLeast(1) })
+    val scrollState = rememberScrollState()
     val currentPage = pages.getOrNull(pagerState.currentPage)
     val currentEvent = (currentPage as? CellDetailPage.Course)?.event
     var currentAdjustment by remember { mutableStateOf<CourseAdjustment?>(null) }
+
+    LaunchedEffect(cell) {
+        if (cell != null) {
+            pagerState.scrollToPage(0)
+            scrollState.scrollTo(0)
+        }
+    }
 
     LaunchedEffect(currentEvent, currentWeekNumber, showEditSheet) {
         if (currentEvent != null && onGetAdjustmentForEvent != null) {
@@ -143,8 +159,8 @@ fun CellDetailSheet(
         }
     }
 
-    WindowBottomSheet(
-        show = true,
+    OverlayBottomSheet(
+        show = isSheetVisible,
         title = sheetTitle,
         endAction = if (currentEvent != null) {
             {
@@ -158,43 +174,49 @@ fun CellDetailSheet(
         } else {
             null
         },
-        onDismissRequest = onDismissRequest
+        onDismissRequest = onDismissRequest,
+        onDismissFinished = { cachedCell = null }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxWidth()
-            ) { page ->
-                when (val item = pages[page]) {
-                    is CellDetailPage.Exam -> ExamDetailPage(
-                        exam = item.exam,
-                        themeColor = courseColors.getCourseColor(colorIndexResolver(item.exam)).light,
-                        currentWeekNumber = currentWeekNumber,
-                        dayNames = dayNames,
-                        onOpenMap = openMap
-                    )
-                    is CellDetailPage.Course -> CourseDetailPage(
-                        event = item.event,
-                        currentWeekNumber = currentWeekNumber,
-                        courseThemeColor = courseColors.getCourseColor(item.event.colorIndex).light,
-                        dayNames = dayNames,
-                        onOpenMap = openMap
+        if (pages.isNotEmpty()) {
+            // 启用垂直滚动以便向下拖拽内容区时通过 NestedScroll 触发抽屉自动收回
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxWidth()
+                ) { page ->
+                    val item = pages.getOrNull(page) ?: return@HorizontalPager
+                    when (item) {
+                        is CellDetailPage.Exam -> ExamDetailPage(
+                            exam = item.exam,
+                            themeColor = courseColors.getCourseColor(colorIndexResolver(item.exam)).light,
+                            currentWeekNumber = currentWeekNumber,
+                            dayNames = dayNames,
+                            onOpenMap = openMap
+                        )
+                        is CellDetailPage.Course -> CourseDetailPage(
+                            event = item.event,
+                            currentWeekNumber = currentWeekNumber,
+                            courseThemeColor = courseColors.getCourseColor(item.event.colorIndex).light,
+                            dayNames = dayNames,
+                            onOpenMap = openMap
+                        )
+                    }
+                }
+
+                if (pages.size > 1) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    WormPagerIndicator(
+                        pagerState = pagerState,
+                        pageCount = pages.size,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-            }
-
-            if (pages.size > 1) {
-                Spacer(modifier = Modifier.height(16.dp))
-                WormPagerIndicator(
-                    pagerState = pagerState,
-                    pageCount = pages.size,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
         }
     }

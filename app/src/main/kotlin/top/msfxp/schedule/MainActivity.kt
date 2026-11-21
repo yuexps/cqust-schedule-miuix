@@ -9,7 +9,6 @@ import top.msfxp.schedule.platform.PlatformSubScreens
 import top.msfxp.schedule.ui.settings.subscreens.CalendarSyncScreen
 import top.msfxp.schedule.ui.settings.subscreens.ClassAutomationScreen
 import top.msfxp.schedule.ui.settings.subscreens.PermissionManagementScreen
-import top.msfxp.schedule.ui.settings.subscreens.PersonalizationScreen
 import top.msfxp.schedule.ui.settings.subscreens.PreClassReminderScreen
 import top.msfxp.schedule.util.AppActionHelper
 
@@ -18,7 +17,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         PlatformSubScreenRegistry.screens = PlatformSubScreens(
-            Personalization = { onBack -> PersonalizationScreen(onBack = onBack) },
             PreClassReminder = { onBack -> PreClassReminderScreen(onBack = onBack) },
             CalendarSync = { onBack -> CalendarSyncScreen(onBack = onBack) },
             ClassAutomation = { onBack, onNavigateToPermissions ->

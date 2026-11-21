@@ -14,7 +14,6 @@ import top.msfxp.schedule.platform.PlatformSubScreenRegistry
 import top.msfxp.schedule.platform.PlatformSubScreens
 import top.msfxp.schedule.platform.installIosNotificationCenterDelegate
 import top.msfxp.schedule.platform.iosModule
-import top.msfxp.schedule.ui.IosPersonalizationScreen
 import top.msfxp.schedule.ui.IosPreClassReminderScreen
 import top.msfxp.schedule.util.iosCoroutineExceptionHandler
 import top.msfxp.schedule.util.ioDispatcher
@@ -29,7 +28,6 @@ fun initIosDependencies() {
 
     PlatformExternalActions.delegate = IosPlatformExternalHandler
     PlatformSubScreenRegistry.screens = PlatformSubScreens(
-        Personalization = { onBack -> IosPersonalizationScreen(onBack = onBack) },
         PreClassReminder = { onBack -> IosPreClassReminderScreen(onBack = onBack) }
     )
     installIosNotificationCenterDelegate()

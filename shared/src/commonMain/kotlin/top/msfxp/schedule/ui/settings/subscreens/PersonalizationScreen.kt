@@ -1,57 +1,93 @@
 package top.msfxp.schedule.ui.settings.subscreens
 
-import android.graphics.BitmapFactory
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.launch
-import org.koin.androidx.compose.koinViewModel
-import top.msfxp.schedule.R
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.viewmodel.koinViewModel
 import top.msfxp.schedule.data.model.DefaultCourseColors
+import top.msfxp.schedule.platform.PlatformCropSource
+import top.msfxp.schedule.platform.rememberPlatformWallpaperPicker
+import top.msfxp.schedule.platform.wallpaperCropDialogProperties
+import top.msfxp.schedule.shared.resources.Res
+import top.msfxp.schedule.shared.resources.common_back
+import top.msfxp.schedule.shared.resources.crop_wallpaper_loading
+import top.msfxp.schedule.shared.resources.personalization_card_alpha_title
+import top.msfxp.schedule.shared.resources.personalization_section_palette
+import top.msfxp.schedule.shared.resources.personalization_section_wallpaper
+import top.msfxp.schedule.shared.resources.personalization_title
+import top.msfxp.schedule.shared.resources.personalization_wallpaper_change
+import top.msfxp.schedule.shared.resources.personalization_wallpaper_clear
+import top.msfxp.schedule.shared.resources.personalization_wallpaper_custom_status
+import top.msfxp.schedule.shared.resources.personalization_wallpaper_default_status
+import top.msfxp.schedule.shared.resources.personalization_wallpaper_mask_dim_title
+import top.msfxp.schedule.shared.resources.personalization_wallpaper_select
 import top.msfxp.schedule.ui.settings.PersonalizationViewModel
-import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.SnackbarHost
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.icon.extended.Image
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.SliderPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
 import kotlin.math.roundToInt
 
-// 个性化设置界面
+// 跨平台通用个性化设置界面（课表壁纸与 16 色课程调色板）
 @Composable
 fun PersonalizationScreen(
     onBack: () -> Unit,
     viewModel: PersonalizationViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val wallpaperBitmap by viewModel.wallpaperBitmapFlow.collectAsState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
 
     var editingSlotIndex by remember { mutableStateOf<Int?>(null) }
+    var cropSource by remember { mutableStateOf<PlatformCropSource?>(null) }
+    var isDecodingCropImage by remember { mutableStateOf(false) }
 
     var localMaskDim by remember { mutableFloatStateOf(uiState.wallpaperMaskDim) }
     var localCardAlpha by remember { mutableFloatStateOf(uiState.courseCardAlpha) }
@@ -61,22 +97,16 @@ fun PersonalizationScreen(
         localCardAlpha = uiState.courseCardAlpha
     }
 
-    val croppingBitmap by viewModel.croppingBitmap.collectAsState()
-    val isDecodingCropImage by viewModel.isDecodingCropImage.collectAsState()
+    val wallpaperPicker = rememberPlatformWallpaperPicker(
+        onDecodingStateChange = { isDecodingCropImage = it },
+        onImageReady = { cropSource = it },
+        onError = { viewModel.notifyWallpaperSetFailed() }
+    )
 
-    // 相册图片挑选器
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            viewModel.prepareCropping(uri)
-        }
-    }
-
-    // 监听提示消息
+    // 监听操作反馈提示
     LaunchedEffect(uiState.message) {
         uiState.message?.let { msg ->
-            val text = context.getString(msg.resId)
+            val text = getString(msg.res)
             scope.launch {
                 snackbarHostState.showSnackbar(text)
             }
@@ -84,19 +114,16 @@ fun PersonalizationScreen(
         }
     }
 
-    // 壁纸缓存流
-    val wallpaperBitmap by viewModel.wallpaperBitmapFlow.collectAsState()
-
     Scaffold(
         snackbarHost = { SnackbarHost(state = snackbarHostState) },
         topBar = {
             SmallTopAppBar(
-                title = stringResource(R.string.personalization_title),
+                title = stringResource(Res.string.personalization_title),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = MiuixIcons.ChevronBackward,
-                            contentDescription = stringResource(R.string.common_back),
+                            contentDescription = stringResource(Res.string.common_back),
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -113,7 +140,7 @@ fun PersonalizationScreen(
         ) {
             // 分组一：课表壁纸设置
             item {
-                SmallTitle(text = stringResource(R.string.personalization_section_wallpaper))
+                SmallTitle(text = stringResource(Res.string.personalization_section_wallpaper))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -125,7 +152,7 @@ fun PersonalizationScreen(
                             .padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        // 壁纸状态行
+                        // 壁纸预览与状态行
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -164,9 +191,9 @@ fun PersonalizationScreen(
                             ) {
                                 Text(
                                     text = if (uiState.hasCustomWallpaper) {
-                                        stringResource(R.string.personalization_wallpaper_custom_status)
+                                        stringResource(Res.string.personalization_wallpaper_custom_status)
                                     } else {
-                                        stringResource(R.string.personalization_wallpaper_default_status)
+                                        stringResource(Res.string.personalization_wallpaper_default_status)
                                     },
                                     style = MiuixTheme.textStyles.title3.copy(fontWeight = FontWeight.Bold),
                                     color = MiuixTheme.colorScheme.onSurface
@@ -182,24 +209,20 @@ fun PersonalizationScreen(
                             Button(
                                 colors = ButtonDefaults.buttonColorsPrimary(),
                                 modifier = Modifier.weight(1f),
-                                onClick = {
-                                    photoPickerLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
-                                }
+                                onClick = { wallpaperPicker.launchPickImage() }
                             ) {
                                 Text(
                                     text = if (uiState.hasCustomWallpaper) {
-                                        stringResource(R.string.personalization_wallpaper_change)
+                                        stringResource(Res.string.personalization_wallpaper_change)
                                     } else {
-                                        stringResource(R.string.personalization_wallpaper_select)
+                                        stringResource(Res.string.personalization_wallpaper_select)
                                     }
                                 )
                             }
 
                             if (uiState.hasCustomWallpaper) {
                                 TextButton(
-                                    text = stringResource(R.string.personalization_wallpaper_clear),
+                                    text = stringResource(Res.string.personalization_wallpaper_clear),
                                     modifier = Modifier.weight(1f),
                                     onClick = { viewModel.clearWallpaper() }
                                 )
@@ -214,7 +237,7 @@ fun PersonalizationScreen(
                             ) {
                                 SliderPreference(
                                     title = stringResource(
-                                        R.string.personalization_wallpaper_mask_dim_title,
+                                        Res.string.personalization_wallpaper_mask_dim_title,
                                         (localMaskDim * 100).roundToInt()
                                     ),
                                     value = localMaskDim,
@@ -227,7 +250,7 @@ fun PersonalizationScreen(
 
                                 SliderPreference(
                                     title = stringResource(
-                                        R.string.personalization_card_alpha_title,
+                                        Res.string.personalization_card_alpha_title,
                                         (localCardAlpha * 100).roundToInt()
                                     ),
                                     value = localCardAlpha,
@@ -243,9 +266,9 @@ fun PersonalizationScreen(
                 }
             }
 
-            // 分组二：课程配色
+            // 分组二：课程配色（4x4 色块网格）
             item {
-                SmallTitle(text = stringResource(R.string.personalization_section_palette))
+                SmallTitle(text = stringResource(Res.string.personalization_section_palette))
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -296,49 +319,26 @@ fun PersonalizationScreen(
                 }
             }
         }
-    }
 
-    // 颜色修改弹窗
-    editingSlotIndex?.let { slotIdx ->
-        val currentSlotColor = uiState.courseColors.getOrNull(slotIdx)?.light ?: DefaultCourseColors[0].light
-        val defaultSlotColor = DefaultCourseColors.getOrElse(slotIdx) { DefaultCourseColors[0] }
-
+        // 颜色修改抽屉（依托当前 Scaffold 宿主）
+        val activeSlot = editingSlotIndex ?: 0
         ColorPickerDialog(
-            show = true,
-            slotIndex = slotIdx,
-            initialColor = currentSlotColor,
-            defaultColor = defaultSlotColor,
+            show = editingSlotIndex != null,
+            slotIndex = activeSlot,
+            initialColor = uiState.courseColors.getOrNull(activeSlot)?.light ?: DefaultCourseColors[0].light,
+            defaultColor = DefaultCourseColors.getOrElse(activeSlot) { DefaultCourseColors[0] },
             onDismissRequest = { editingSlotIndex = null },
             onConfirm = { chosenColor ->
-                viewModel.updateSlotColor(slotIdx, chosenColor)
+                editingSlotIndex?.let { slot ->
+                    viewModel.updateSlotColor(slot, chosenColor)
+                }
             }
         )
-    }
 
-    // 壁纸区域框选器弹窗
-    croppingBitmap?.let { cropSrc ->
-        val cropImage = remember(cropSrc) { cropSrc.asImageBitmap() }
-        WallpaperCropDialog(
-            sourceImage = cropImage,
-            onConfirm = { region ->
-                viewModel.applyCroppedWallpaper(cropSrc, region)
-            },
-            onDismissRequest = {
-                viewModel.cancelCropping()
-            },
-            // Android 需将弹窗延展至系统栏四边，避免内容区被裁剪影响取景比例
-            dialogProperties = DialogProperties(
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false
-            )
-        )
-    }
-
-    // 图像载入中提示
-    if (isDecodingCropImage) {
-        WindowDialog(
-            show = true,
-            title = stringResource(R.string.crop_wallpaper_loading),
+        // 图像载入中提示弹窗
+        OverlayDialog(
+            show = isDecodingCropImage,
+            title = stringResource(Res.string.crop_wallpaper_loading),
             onDismissRequest = {}
         ) {
             Box(
@@ -348,12 +348,28 @@ fun PersonalizationScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = stringResource(R.string.crop_wallpaper_loading),
+                    text = stringResource(Res.string.crop_wallpaper_loading),
                     style = MiuixTheme.textStyles.body2,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary
                 )
             }
         }
     }
-}
 
+    // 壁纸区域框选全屏弹窗
+    val activeCropSource = cropSource
+    if (activeCropSource != null) {
+        WallpaperCropDialog(
+            sourceImage = activeCropSource.preview,
+            onConfirm = { region ->
+                cropSource = null
+                scope.launch {
+                    val bytes = wallpaperPicker.cropToJpegBytes(activeCropSource, region)
+                    viewModel.saveCroppedWallpaper(bytes)
+                }
+            },
+            onDismissRequest = { cropSource = null },
+            dialogProperties = wallpaperCropDialogProperties()
+        )
+    }
+}

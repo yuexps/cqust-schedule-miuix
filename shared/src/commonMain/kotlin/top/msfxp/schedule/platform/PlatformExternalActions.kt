@@ -4,12 +4,14 @@ import androidx.compose.ui.graphics.ImageBitmap
 import org.jetbrains.compose.resources.StringResource
 import top.msfxp.schedule.shared.resources.Res
 import top.msfxp.schedule.shared.resources.map_app_amap
+import top.msfxp.schedule.shared.resources.map_app_apple
 import top.msfxp.schedule.shared.resources.map_app_baidu
 import top.msfxp.schedule.shared.resources.map_app_tencent
 import top.msfxp.schedule.util.CourseLocationFormatter
 
 // 跨平台地图应用枚举
 enum class MapAppType(val appNameRes: StringResource) {
+    APPLE(Res.string.map_app_apple),
     AMAP(Res.string.map_app_amap),
     BAIDU(Res.string.map_app_baidu),
     TENCENT(Res.string.map_app_tencent)

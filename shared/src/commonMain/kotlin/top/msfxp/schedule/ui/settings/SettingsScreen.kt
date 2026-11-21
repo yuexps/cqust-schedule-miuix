@@ -27,12 +27,11 @@ import top.yukonga.miuix.kmp.icon.basic.Check
 import top.yukonga.miuix.kmp.icon.basic.Close
 import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
 import top.yukonga.miuix.kmp.icon.extended.Import
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
+import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.theme.LocalDismissState
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
-import top.yukonga.miuix.kmp.window.WindowDialog
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.number
 import top.msfxp.schedule.util.daysInMonth
@@ -144,47 +143,44 @@ fun SettingsScreen(
         }
 
         // 退出登录确认弹窗
-        if (showLogoutDialog) {
-            LogoutConfirmDialog(
-                onConfirm = {
-                    showLogoutDialog = false
-                    viewModel.logout(onNavigateToLogin)
-                },
-                onDismiss = { showLogoutDialog = false }
-            )
-        }
+        LogoutConfirmDialog(
+            show = showLogoutDialog,
+            onConfirm = {
+                showLogoutDialog = false
+                viewModel.logout(onNavigateToLogin)
+            },
+            onDismiss = { showLogoutDialog = false }
+        )
 
         // 学期选择抽屉
-        if (showSemesterPickerSheet && uiState.availableSemesters.isNotEmpty()) {
-            SemesterPickerBottomSheet(
-                uiState = uiState,
-                onSelectSemester = { semId ->
-                    viewModel.switchSemester(
-                        semesterId = semId,
-                        onNeedLogin = onNavigateToLogin,
-                        onSuccess = { showSemesterPickerSheet = false }
-                    )
-                },
-                onDismiss = {
-                    if (uiState.switchingSemesterId == null) {
-                        showSemesterPickerSheet = false
-                    }
+        SemesterPickerBottomSheet(
+            show = showSemesterPickerSheet && uiState.availableSemesters.isNotEmpty(),
+            uiState = uiState,
+            onSelectSemester = { semId ->
+                viewModel.switchSemester(
+                    semesterId = semId,
+                    onNeedLogin = onNavigateToLogin,
+                    onSuccess = { showSemesterPickerSheet = false }
+                )
+            },
+            onDismiss = {
+                if (uiState.switchingSemesterId == null) {
+                    showSemesterPickerSheet = false
                 }
-            )
-        }
+            }
+        )
 
         // 行课起始日期设置抽屉
-        if (showSetDateDialog) {
-            StartDatePickerDialog(
-                initialDate = uiState.currentSemester.effectiveStartDate,
-                onConfirm = { mondayDate ->
-                    val formatted = mondayDate.formatYmd()
-                    viewModel.updateSemesterStartDate(formatted)
-                    showSetDateDialog = false
-                },
-                onDismiss = { showSetDateDialog = false }
-            )
-        }
+        StartDatePickerDialog(
+            show = showSetDateDialog,
+            initialDate = uiState.currentSemester.effectiveStartDate,
+            onConfirm = { mondayDate ->
+                val formatted = mondayDate.formatYmd()
+                viewModel.updateSemesterStartDate(formatted)
+                showSetDateDialog = false
+            },
+            onDismiss = { showSetDateDialog = false }
+        )
     }
 }
 
@@ -518,33 +514,27 @@ private fun AboutSection(onAboutClick: () -> Unit) {
 // 退出登录确认弹窗
 @Composable
 private fun LogoutConfirmDialog(
+    show: Boolean,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    WindowDialog(
-        show = true,
+    OverlayDialog(
+        show = show,
         title = stringResource(Res.string.settings_dialog_logout_title),
         summary = stringResource(Res.string.settings_dialog_logout_message),
         onDismissRequest = onDismiss
     ) {
-        val dismiss = LocalDismissState.current
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             TextButton(
                 text = stringResource(Res.string.common_cancel),
-                onClick = {
-                    dismiss?.invoke()
-                    onDismiss()
-                },
+                onClick = onDismiss,
                 modifier = Modifier.weight(1f)
             )
             Button(
-                onClick = {
-                    dismiss?.invoke()
-                    onConfirm()
-                },
+                onClick = onConfirm,
                 modifier = Modifier.weight(1f)
             ) {
                 Text(stringResource(Res.string.settings_dialog_logout_title))
@@ -556,12 +546,13 @@ private fun LogoutConfirmDialog(
 // 学期选择抽屉
 @Composable
 private fun SemesterPickerBottomSheet(
+    show: Boolean,
     uiState: SettingsUiState,
     onSelectSemester: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    WindowBottomSheet(
-        show = true,
+    OverlayBottomSheet(
+        show = show,
         title = stringResource(Res.string.settings_sheet_switch_semester),
         onDismissRequest = onDismiss
     ) {
@@ -635,13 +626,14 @@ private fun SemesterPickerBottomSheet(
 // 行课起始日期设置抽屉
 @Composable
 private fun StartDatePickerDialog(
+    show: Boolean,
     initialDate: LocalDate,
     onConfirm: (LocalDate) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var selectedYear by remember(initialDate) { mutableIntStateOf(initialDate.year) }
-    var selectedMonth by remember(initialDate) { mutableIntStateOf(initialDate.month.number) }
-    var selectedDay by remember(initialDate) { mutableIntStateOf(initialDate.day) }
+    var selectedYear by remember(show, initialDate) { mutableIntStateOf(initialDate.year) }
+    var selectedMonth by remember(show, initialDate) { mutableIntStateOf(initialDate.month.number) }
+    var selectedDay by remember(show, initialDate) { mutableIntStateOf(initialDate.day) }
 
     val maxDaysInMonth = remember(selectedYear, selectedMonth) {
         try {
@@ -669,18 +661,12 @@ private fun StartDatePickerDialog(
         pickedDate?.previousOrSameMonday()
     }
 
-    WindowBottomSheet(
-        show = true,
+    OverlayBottomSheet(
+        show = show,
         title = stringResource(Res.string.settings_dialog_set_start_date),
         onDismissRequest = onDismiss,
         startAction = {
-            val dismiss = LocalDismissState.current
-            IconButton(
-                onClick = {
-                    dismiss?.invoke()
-                    onDismiss()
-                }
-            ) {
+            IconButton(onClick = onDismiss) {
                 Icon(
                     imageVector = MiuixIcons.Basic.Close,
                     contentDescription = stringResource(Res.string.common_cancel)
@@ -688,14 +674,13 @@ private fun StartDatePickerDialog(
             }
         },
         endAction = {
-            val dismiss = LocalDismissState.current
             IconButton(
                 onClick = {
                     if (calculatedMonday != null) {
                         onConfirm(calculatedMonday)
+                    } else {
+                        onDismiss()
                     }
-                    dismiss?.invoke()
-                    onDismiss()
                 }
             ) {
                 Icon(

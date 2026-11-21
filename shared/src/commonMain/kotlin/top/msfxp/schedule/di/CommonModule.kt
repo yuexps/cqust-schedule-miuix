@@ -11,6 +11,7 @@ import top.msfxp.schedule.ui.courses.CourseOverviewViewModel
 import top.msfxp.schedule.ui.login.CqustLoginViewModel
 import top.msfxp.schedule.ui.schedule.WeeklyScheduleViewModel
 import top.msfxp.schedule.ui.settings.AboutViewModel
+import top.msfxp.schedule.ui.settings.PersonalizationViewModel
 import top.msfxp.schedule.ui.settings.SettingsViewModel
 
 // 双端共享的 Koin 业务与视图模型模块
@@ -27,6 +28,7 @@ val commonModule = module {
     // 跨平台共享 ViewModel
     viewModel { WeeklyScheduleViewModel(get(), get(), get(), get(), get(), get()) }
     viewModel { SettingsViewModel(get(), get(), get(), get(), get(), get()) }
+    viewModel { PersonalizationViewModel(get(), get()) }
     viewModel { CqustLoginViewModel(get(), get(), get()) }
     viewModel { CourseOverviewViewModel(get(), get(), get()) }
     viewModel { AboutViewModel(get(), get(), get()) }

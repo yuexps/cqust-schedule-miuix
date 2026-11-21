@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -23,8 +22,6 @@ import top.msfxp.schedule.data.model.AutoControlMode
 import top.msfxp.schedule.service.AudioModeControlService
 import top.msfxp.schedule.service.CourseAlarmReceiver
 import top.msfxp.schedule.util.AppActionHelper
-import top.msfxp.schedule.util.ImageBitmapHelper
-import java.io.ByteArrayOutputStream
 import java.io.File
 
 // 创建 Android 端 DataStore（复用原 cqust_schedule_prefs 路径，保持存量数据零迁移）
@@ -69,26 +66,6 @@ class AndroidPlatformWallpaperStorage(private val context: Context) : PlatformWa
             if (file.exists()) file.delete()
             true
         }.getOrDefault(false)
-    }
-
-    // Android 端：从相册 Uri 解码并纠正 EXIF 旋转（供裁剪弹窗使用）
-    suspend fun decodeBitmapForCropping(uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
-        ImageBitmapHelper.decodeAndCorrectOrientation(context, uri, maxDimension = 3840)
-    }
-
-    // Android 端：将 Bitmap 压缩为 JPEG 字节数组
-    suspend fun encodeBitmapToJpegBytes(bitmap: Bitmap, quality: Int = 92): ByteArray = withContext(Dispatchers.IO) {
-        ByteArrayOutputStream().use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, out)
-            out.toByteArray()
-        }
-    }
-
-    // Android 端：直接从 Uri 解码并编码为 JPEG 字节数组
-    suspend fun decodeUriToJpegBytes(uri: Uri, quality: Int = 88): ByteArray? = withContext(Dispatchers.IO) {
-        val bitmap = ImageBitmapHelper.decodeAndCorrectOrientation(context, uri, maxDimension = 2560)
-            ?: return@withContext null
-        encodeBitmapToJpegBytes(bitmap, quality)
     }
 }
 
@@ -265,6 +242,7 @@ class AndroidPlatformExternalHandler(private val context: Context) : PlatformExt
 
     override fun openMapWalkingNavigation(type: MapAppType, destination: String): Boolean {
         val legacyType = when (type) {
+            MapAppType.APPLE -> return false
             MapAppType.AMAP -> top.msfxp.schedule.util.MapAppType.AMAP
             MapAppType.BAIDU -> top.msfxp.schedule.util.MapAppType.BAIDU
             MapAppType.TENCENT -> top.msfxp.schedule.util.MapAppType.TENCENT

@@ -78,6 +78,7 @@
     <!-- 地图导航与路径规划 -->
     <string name="map_navigate_title">步行导航</string>
     <string name="map_navigate_destination_label">目的地</string>
+    <string name="map_app_apple">Apple 地图</string>
     <string name="map_app_amap">高德地图</string>
     <string name="map_app_baidu">百度地图</string>
     <string name="map_app_tencent">腾讯地图</string>
@@ -169,6 +170,7 @@
     <string name="reminder_test_sent_toast">已发送测试通知，请查看通知栏</string>
     <string name="reminder_test_alarm_permission_toast">请先开启精确闹钟权限</string>
     <string name="reminder_hint_text">为确保手机息屏休眠时能准时弹出通知，请前往“权限管理”开启精确闹钟与自启动权限。</string>
+    <string name="reminder_hint_text_ios">课前提醒由系统本地通知调度，请确保在系统设置中允许本应用发送通知。</string>
 
     <!-- 课中自动化子页面 -->
     <string name="automation_title">自动化功能</string>

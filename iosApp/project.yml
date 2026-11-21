@@ -20,6 +20,7 @@ targets:
         # Compose Multiplatform iOS 渲染要求，缺失会在启动时触发 PlistSanityCheck 崩溃
         CADisableMinimumFrameDurationOnPhone: true
         LSApplicationQueriesSchemes:
+          - maps
           - iosamap
           - baidumap
           - qqmap

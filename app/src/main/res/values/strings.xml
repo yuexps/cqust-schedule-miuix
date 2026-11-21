@@ -78,6 +78,7 @@
     <!-- 地图导航与路径规划 -->
     <string name="map_navigate_title">步行导航</string>
     <string name="map_navigate_destination_label">目的地</string>
+    <string name="map_app_apple">Apple 地图</string>
     <string name="map_app_amap">高德地图</string>
     <string name="map_app_baidu">百度地图</string>
     <string name="map_app_tencent">腾讯地图</string>
