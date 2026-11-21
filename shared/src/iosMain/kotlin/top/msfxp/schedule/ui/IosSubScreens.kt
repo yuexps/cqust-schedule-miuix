@@ -3,8 +3,10 @@ package top.msfxp.schedule.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
@@ -60,14 +62,20 @@ fun IosCalendarSyncScreen(
     viewModel: SettingsViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var permissionDeniedCount by remember { mutableIntStateOf(0) }
 
     CalendarSyncContent(
         settings = uiState.appSettings,
+        permissionDeniedCount = permissionDeniedCount,
         onBack = onBack,
         onAutoSyncChange = { enabled ->
             if (enabled) {
-                viewModel.syncToCalendarManually { success ->
-                    if (success) viewModel.updateAutoSyncToCalendar(true)
+                viewModel.ensureCalendarAccess { hasAccess ->
+                    if (hasAccess) {
+                        viewModel.updateAutoSyncToCalendar(true)
+                    } else {
+                        permissionDeniedCount++
+                    }
                 }
             } else {
                 viewModel.updateAutoSyncToCalendar(false)

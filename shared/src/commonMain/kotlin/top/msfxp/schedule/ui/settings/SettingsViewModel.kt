@@ -244,6 +244,12 @@ class SettingsViewModel(
         }
     }
 
+    fun ensureCalendarAccess(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            onResult(calendarSync.ensureCalendarAccess())
+        }
+    }
+
     // 更新自动同步到系统日历开关
     fun updateAutoSyncToCalendar(enabled: Boolean) {
         viewModelScope.launch {

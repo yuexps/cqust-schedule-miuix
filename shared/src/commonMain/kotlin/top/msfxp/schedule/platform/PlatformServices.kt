@@ -5,6 +5,7 @@ import top.msfxp.schedule.data.model.AutoControlMode
 
 // 平台系统日历同步接口
 interface PlatformCalendarSync {
+    suspend fun ensureCalendarAccess(): Boolean
     suspend fun syncCurrentScheduleToCalendar(): Boolean
     suspend fun deleteScheduleCalendar(): Boolean
 }

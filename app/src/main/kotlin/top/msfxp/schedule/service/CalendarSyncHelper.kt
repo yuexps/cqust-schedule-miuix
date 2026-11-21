@@ -52,6 +52,8 @@ class CalendarSyncHelper(
         return readGranted && writeGranted
     }
 
+    override suspend fun ensureCalendarAccess(): Boolean = hasCalendarPermission()
+
     // 将当前课表增量同步至系统日历
     override suspend fun syncCurrentScheduleToCalendar(): Boolean = withContext(Dispatchers.IO) {
         if (!hasCalendarPermission()) return@withContext false

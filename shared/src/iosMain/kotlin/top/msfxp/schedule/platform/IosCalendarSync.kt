@@ -8,7 +8,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
@@ -80,7 +82,6 @@ private data class CourseEventContext(
 
 // 自动同步监听所需的数据快照
 private data class AutoSyncSnapshot(
-    val isEnabled: Boolean,
     val semester: Semester?,
     val courses: List<CourseWithEvents>,
     val adjustments: List<CourseAdjustment>,
@@ -104,33 +105,40 @@ class IosCalendarSync(
     private val scope = CoroutineScope(SupervisorJob() + iosCoroutineExceptionHandler + Dispatchers.IO)
 
     // 课表、调课或考试变化时自动刷新已授权的系统日历
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     fun startObserving() {
         scope.launch {
             combine(
-                settingsRepository.appSettingsFlow,
                 scheduleRepository.currentSemesterFlow,
                 scheduleRepository.allCoursesFlow,
                 scheduleRepository.currentAdjustmentsFlow,
                 examRepository.currentSemesterExamsFlow
-            ) { settings, semester, courses, adjustments, exams ->
+            ) { semester, courses, adjustments, exams ->
                 AutoSyncSnapshot(
-                    isEnabled = settings.autoSyncToCalendar,
                     semester = semester,
                     courses = courses,
                     adjustments = adjustments,
                     exams = exams
                 )
-            }.distinctUntilChanged().collectLatest { snapshot ->
-                if (snapshot.isEnabled && hasCalendarAccess()) {
-                    syncCurrentScheduleToCalendar()
+            }.distinctUntilChanged()
+                .drop(1)
+                .debounce(500)
+                .collectLatest {
+                    val settings = settingsRepository.getAppSettingsOnce()
+                    if (settings.autoSyncToCalendar && hasCalendarAccess()) {
+                        syncCurrentScheduleToCalendar()
+                    }
                 }
-            }
         }
     }
 
     // 是否已获得日历读写授权
     fun hasCalendarAccess(): Boolean =
         isAuthorizedStatus(EKEventStore.authorizationStatusForEntityType(EKEntityType.EKEntityTypeEvent))
+
+    override suspend fun ensureCalendarAccess(): Boolean = withContext(Dispatchers.Main) {
+        requestCalendarAccess()
+    }
 
     override suspend fun syncCurrentScheduleToCalendar(): Boolean = withContext(Dispatchers.Main) {
         if (!requestCalendarAccess()) return@withContext false
